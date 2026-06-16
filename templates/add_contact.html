@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}新增新人訊息檔案 - 覺醒行動app{% endblock %}
+{% block extra_css %}
+<style>
+    .add-container {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="add-container">
+    <div class="page-header">
+        <h1>➕ 新增新人訊息檔案</h1>
+        <p class="text-muted">手動建立新人基本與 FORMDH 檔案</p>
+    </div>
+    
+    <div class="card p-4">
+        <form method="post" action="{{ url_for('add_contact') }}">
+            <div class="mb-3">
+                <label class="form-label font-weight-bold">姓名 *</label>
+                <input type="text" name="name" class="form-control" required placeholder="請輸入新人姓名或暱稱">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label font-weight-bold">來源</label>
+                <select name="source" class="form-control">
+                    <option value="">選擇來源</option>
+                    <option value="IG">IG</option>
+                    <option value="LINE">LINE</option>
+                    <option value="活動">活動認識</option>
+                    <option value="轉介紹">轉介紹</option>
+                    <option value="老朋友">老朋友</option>
+                    <option value="其他">其他</option>
+                </select>
+            </div>
+            
+            <div class="mb-4">
+                <label class="form-label font-weight-bold">標籤 (以英文逗號分隔，例如：新人, 高潛力)</label>
+                <input type="text" name="tags" class="form-control" placeholder="新人, 高潛力">
+                <small class="text-muted mt-1 d-block">預設標籤：新人、舊人、高潛力、待追蹤、已成交</small>
+            </div>
+            
+            <button type="submit" class="btn btn-primary w-100 py-2">
+                <i class="fas fa-user-plus"></i> 建立新人檔案並填寫 FORMDH
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

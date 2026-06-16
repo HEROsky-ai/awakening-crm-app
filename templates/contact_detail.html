@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <div>
+        <h1>👤 {{ contact.name }}</h1>
+        <p>
+            {% for tag in tags %}
+            <span class="tag tag-blue">{{ tag }}</span>
+            {% endfor %}
+        </p>
+    </div>
+    <div class="btn-group">
+        <a href="{{ url_for('edit_formdh', contact_id=contact.id) }}" class="btn btn-primary">
+            <i class="fas fa-edit"></i> 編輯 FORMDH
+        </a>
+        <a href="{{ url_for('edit_contact', contact_id=contact.id) }}" class="btn btn-outline">
+            <i class="fas fa-cog"></i> 編輯資料
+        </a>
+    </div>
+</div>
+
+<div class="card" style="display:flex;gap:20px;flex-wrap:wrap;">
+    <div><strong>來源：</strong>{{ contact.source or '-' }}</div>
+    <div><strong>最後互動：</strong>{{ contact.last_interaction or '從未' }}</div>
+    <div><strong>互動次數：</strong>{{ contact.interaction_count }} 次</div>
+</div>
+
+<!-- FORMDH -->
+<h2 style="font-size:18px;margin:20px 0 10px;">
+    📋 FORMDH 檔案
+    {% if profile %}
+    <span style="font-size:13px;color:#666;font-weight:400;">
+        · 完整度 {{ profile.completeness_score }}%
+        <span class="progress" style="display:inline-block;width:100px;vertical-align:middle;margin-left:6px;">
+            <span class="progress-bar" style="width:{{ profile.completeness_score }}%"></span>
+        </span>
+    </span>
+    {% endif %}
+</h2>
+
+<div class="formdh-grid">
+    <!-- F -->
+    <div class="formdh-section">
+        <h3>👨‍👩‍👧‍👦 F - 家庭</h3>
+        <div class="field"><span class="field-key">家庭狀況：</span><span class="field-val">{{ profile.f_family or '' }}</span></div>
+        <div class="field"><span class="field-key">備註：</span><span class="field-val">{{ profile.f_family_notes or '' }}</span></div>
+        {% if not profile.f_family and not profile.f_family_notes %}<div class="empty">尚未填寫</div>{% endif %}
+    </div>
+    <!-- O -->
+    <div class="formdh-section">
+        <h3>💼 O - 工作</h3>
+        <div class="field"><span class="field-key">職業：</span><span class="field-val">{{ profile.o_occupation or '' }}</span></div>
+        <div class="field"><span class="field-key">工作狀況：</span><span class="field-val">{{ profile.o_occupation_notes or '' }}</span></div>
+        <div class="field"><span class="field-key">型態：</span><span class="field-val">{{ profile.o_work_style or '' }}</span></div>
+        {% if not profile.o_occupation and not profile.o_occupation_notes %}<div class="empty">尚未填寫</div>{% endif %}
+    </div>
+    <!-- R -->
+    <div class="formdh-section">
+        <h3>🎯 R - 興趣</h3>
+        <div class="field"><span class="field-key">興趣：</span><span class="field-val">{{ profile.r_interests or '' }}</span></div>
+        <div class="field"><span class="field-key">詳細：</span><span class="field-val">{{ profile.r_interests_detail or '' }}</span></div>
+        <div class="field"><span class="field-key">業餘：</span><span class="field-val">{{ profile.r_hobbies or '' }}</span></div>
+        {% if not profile.r_interests %}<div class="empty">尚未填寫</div>{% endif %}
+    </div>
+    <!-- M -->
+    <div class="formdh-section">
+        <h3>💰 M - 金錢觀</h3>
+        <div class="field"><span class="field-key">金錢觀：</span><span class="field-val">{{ profile.m_money_values or '' }}</span></div>
+        <div class="field"><span class="field-key">收入：</span><span class="field-val">{{ profile.m_income_range or '' }}</span></div>
+        <div class="field"><span class="field-key">投資態度：</span><span class="field-val">{{ profile.m_investment or '' }}</span></div>
+        <div class="field"><span class="field-key">財務目標：</span><span class="field-val">{{ profile.m_financial_goals or '' }}</span></div>
+        {% if not profile.m_money_values %}<div class="empty">尚未填寫</div>{% endif %}
+    </div>
+    <!-- D -->
+    <div class="formdh-section">
+        <h3>🌟 D - 夢想</h3>
+        <div class="field"><span class="field-key">夢想：</span><span class="field-val">{{ profile.d_dreams or '' }}</span></div>
+        <div class="field"><span class="field-key">短期：</span><span class="field-val">{{ profile.d_short_term or '' }}</span></div>
+        <div class="field"><span class="field-key">長期：</span><span class="field-val">{{ profile.d_long_term or '' }}</span></div>
+        <div class="field"><span class="field-key">動機：</span><span class="field-val">{{ profile.d_motivations or '' }}</span></div>
+        {% if not profile.d_dreams %}<div class="empty">尚未填寫</div>{% endif %}
+    </div>
+    <!-- H -->
+    <div class="formdh-section">
+        <h3>💪 H - 健康</h3>
+        <div class="field"><span class="field-key">健康：</span><span class="field-val">{{ profile.h_health or '' }}</span></div>
+        <div class="field"><span class="field-key">運動：</span><span class="field-val">{{ profile.h_fitness or '' }}</span></div>
+        <div class="field"><span class="field-key">飲食：</span><span class="field-val">{{ profile.h_diet or '' }}</span></div>
+        <div class="field"><span class="field-key">壓力：</span><span class="field-val">{{ profile.h_stress or '' }}</span></div>
+        <div class="field"><span class="field-key">健康目標：</span><span class="field-val">{{ profile.h_goals or '' }}</span></div>
+        {% if not profile.h_health %}<div class="empty">尚未填寫</div>{% endif %}
+    </div>
+</div>
+
+{% if profile and (profile.ai_chat_suggestions or profile.ai_current_affairs or profile.ai_missing_info_suggestions) %}
+<div class="card" style="margin-top:16px; border-left:4px solid #3b82f6; background-color:#f8fafc; padding:20px;">
+    <div style="font-weight:bold; font-size:16px; color:#1e3a8a; margin-bottom:12px; display:flex; align-items:center;">
+        <i class="fas fa-lightbulb" style="color:#fbbf24; margin-right:8px; font-size:18px;"></i>
+        AI 聊天建議與注意事項
+    </div>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        {% if profile.ai_chat_suggestions %}
+        <div style="font-size:14px; line-height:1.5;">
+            <strong style="color:#2563eb; display:inline-block; min-width:90px;">💬 聊天建議：</strong>
+            <span style="color:#374151;">{{ profile.ai_chat_suggestions }}</span>
+        </div>
+        {% endif %}
+        
+        {% if profile.ai_current_affairs %}
+        <div style="font-size:14px; line-height:1.5;">
+            <strong style="color:#0d9488; display:inline-block; min-width:90px;">📰 推薦話題：</strong>
+            <span style="color:#374151;">{{ profile.ai_current_affairs }}</span>
+        </div>
+        {% endif %}
+        
+        {% if profile.ai_missing_info_suggestions %}
+        <div style="font-size:14px; line-height:1.5;">
+            <strong style="color:#ca8a04; display:inline-block; min-width:90px;">⚠️ 注意事項：</strong>
+            <span style="color:#374151;">{{ profile.ai_missing_info_suggestions }}</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if missing_fields %}
+<div class="card" style="margin-top:16px;">
+    <div class="card-header"><span>📌 建議填寫的欄位</span></div>
+    {% for f in missing_fields %}
+    <span class="tag tag-orange">{{ f.section_name }} - {{ f.description }}</span>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- 互動記錄 -->
+<h2 style="font-size:18px;margin:20px 0 10px;">
+    💬 互動記錄（{{ interactions|length }} 筆）
+</h2>
+
+<div class="card">
+    {% if interactions %}
+    <div class="table-wrap">
+        <table>
+            <tr><th>日期</th><th>類型</th><th>內容</th><th>管道</th></tr>
+            {% for i in interactions %}
+            <tr>
+                <td>{{ i.date }}</td>
+                <td>
+                    {% set type_map = {'chat':'💬 聊天','care':'❤️ 關心','share':'📤 分享','invite':'🎉 邀約','followup':'📞 追蹤'} %}
+                    {{ type_map.get(i.type, i.type) }}
+                </td>
+                <td>{{ i.content }}</td>
+                <td>{{ i.channel or '-' }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><p>尚無互動記錄</p></div>
+    {% endif %}
+</div>
+
+<!-- 新增互動 -->
+<div class="card">
+    <div class="card-header"><span>📝 記錄新的互動</span></div>
+    <form method="post" action="{{ url_for('add_interaction', contact_id=contact.id) }}">
+        <div class="form-row">
+            <div class="form-group">
+                <label>類型</label>
+                <select name="type" class="form-control">
+                    <option value="chat">💬 聊天</option>
+                    <option value="care">❤️ 關心</option>
+                    <option value="share">📤 分享</option>
+                    <option value="invite">🎉 邀約</option>
+                    <option value="followup">📞 追蹤</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>管道</label>
+                <select name="channel" class="form-control">
+                    <option value="">選擇管道</option>
+                    {% for ch in ['IG','LINE','電話','見面','訊息','其他'] %}
+                    <option value="{{ ch }}">{{ ch }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>內容</label>
+            <textarea name="content" class="form-control" placeholder="記錄這次互動的重點..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-success">儲存互動記錄</button>
+    </form>
+</div>
+{% endblock %}

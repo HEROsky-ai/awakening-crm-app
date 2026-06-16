@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h1>📋 編輯 FORMDH 檔案</h1>
+    <p>{{ contact.name }}</p>
+</div>
+
+<form method="post">
+<div class="formdh-grid">
+    <!-- F -->
+    <div class="formdh-section">
+        <h3>👨‍👩‍👧‍👦 F - 家庭</h3>
+        <div class="form-group">
+            <label>家庭狀況</label>
+            <input type="text" name="f_family" class="form-control" value="{{ profile.f_family or '' }}" placeholder="已婚、單身、有幾個小孩等">
+        </div>
+        <div class="form-group">
+            <label>家庭備註</label>
+            <textarea name="f_family_notes" class="form-control" placeholder="其他家庭相關資訊">{{ profile.f_family_notes or '' }}</textarea>
+        </div>
+    </div>
+    <!-- O -->
+    <div class="formdh-section">
+        <h3>💼 O - 工作</h3>
+        <div class="form-group">
+            <label>職業</label>
+            <input type="text" name="o_occupation" class="form-control" value="{{ profile.o_occupation or '' }}" placeholder="業務、工程師、老師...">
+        </div>
+        <div class="form-group">
+            <label>工作狀況</label>
+            <textarea name="o_occupation_notes" class="form-control" placeholder="對目前工作的想法、轉職計畫等">{{ profile.o_occupation_notes or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>工作型態</label>
+            <input type="text" name="o_work_style" class="form-control" value="{{ profile.o_work_style or '' }}" placeholder="全職、兼職、自由業、打工">
+        </div>
+    </div>
+    <!-- R -->
+    <div class="formdh-section">
+        <h3>🎯 R - 興趣</h3>
+        <div class="form-group">
+            <label>興趣愛好</label>
+            <input type="text" name="r_interests" class="form-control" value="{{ profile.r_interests or '' }}" placeholder="多個用逗號分隔">
+        </div>
+        <div class="form-group">
+            <label>興趣詳細</label>
+            <textarea name="r_interests_detail" class="form-control" placeholder="對方特別喜歡聊什麼、做什麼">{{ profile.r_interests_detail or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>業餘活動</label>
+            <textarea name="r_hobbies" class="form-control" placeholder="假日都在做什麼">{{ profile.r_hobbies or '' }}</textarea>
+        </div>
+    </div>
+    <!-- M -->
+    <div class="formdh-section">
+        <h3>💰 M - 金錢觀</h3>
+        <div class="form-group">
+            <label>金錢觀</label>
+            <textarea name="m_money_values" class="form-control" placeholder="理財態度的、對花錢的看法">{{ profile.m_money_values or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>收入區間</label>
+            <input type="text" name="m_income_range" class="form-control" value="{{ profile.m_income_range or '' }}" placeholder="年收約多少">
+        </div>
+        <div class="form-group">
+            <label>投資理財態度</label>
+            <textarea name="m_investment" class="form-control" placeholder="有在投資嗎、偏好什麼類型">{{ profile.m_investment or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>財務目標</label>
+            <textarea name="m_financial_goals" class="form-control" placeholder="想達成什麼財務目標">{{ profile.m_financial_goals or '' }}</textarea>
+        </div>
+    </div>
+    <!-- D -->
+    <div class="formdh-section">
+        <h3>🌟 D - 夢想</h3>
+        <div class="form-group">
+            <label>夢想目標</label>
+            <textarea name="d_dreams" class="form-control" placeholder="人生最大的夢想是...">{{ profile.d_dreams or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>短期夢想（1年內）</label>
+            <textarea name="d_short_term" class="form-control" placeholder="最近想完成什麼">{{ profile.d_short_term or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>長期夢想（5-10年）</label>
+            <textarea name="d_long_term" class="form-control" placeholder="未來五年想達到什麼">{{ profile.d_long_term or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>動機與渴望</label>
+            <textarea name="d_motivations" class="form-control" placeholder="驅動他前進的原因">{{ profile.d_motivations or '' }}</textarea>
+        </div>
+    </div>
+    <!-- H -->
+    <div class="formdh-section">
+        <h3>💪 H - 健康</h3>
+        <div class="form-group">
+            <label>健康狀況</label>
+            <textarea name="h_health" class="form-control" placeholder="目前健康狀況">{{ profile.h_health or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>運動習慣</label>
+            <textarea name="h_fitness" class="form-control" placeholder="有運動嗎、頻率如何">{{ profile.h_fitness or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>飲食習慣</label>
+            <textarea name="h_diet" class="form-control" placeholder="飲食偏好、有沒有在做健康管理">{{ profile.h_diet or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>壓力來源</label>
+            <textarea name="h_stress" class="form-control" placeholder="最近壓力大嗎、原因是什麼">{{ profile.h_stress or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>健康目標</label>
+            <textarea name="h_goals" class="form-control" placeholder="想達成的健康目標">{{ profile.h_goals or '' }}</textarea>
+        </div>
+    </div>
+</div>
+
+<div style="margin-top:20px;display:flex;gap:10px;">
+    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 儲存 FORMDH 檔案</button>
+    <a href="{{ url_for('view_contact', contact_id=contact.id) }}" class="btn btn-outline">取消</a>
+</div>
+</form>
+{% endblock %}

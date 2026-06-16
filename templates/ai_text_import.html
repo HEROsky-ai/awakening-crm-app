@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}AI 文字自動建檔 - 覺醒行動app{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🤖 AI 文字智慧建檔</h1>
+    <p class="text-muted">提供對話記錄、自介、隨手筆記或客人描述，由 AI 自動辨識並鍵入 FORMDH 檔案各個欄位。</p>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8 col-md-12">
+        <div class="card shadow-sm border-0" style="border-radius: 16px;">
+            <div class="card-header bg-white border-bottom py-3" style="border-top-left-radius: 16px; border-top-right-radius: 16px;">
+                <h5 class="mb-0 font-weight-bold text-primary"><i class="fas fa-magic me-1"></i> AI 智慧建檔與分析</h5>
+            </div>
+            <div class="card-body p-4">
+                <form id="aiImportForm" method="post" action="{{ url_for('contacts_ai_import') }}" onsubmit="showLoadingState()">
+                    <!-- 聯絡人選擇 -->
+                    <div class="mb-4">
+                        <label for="contactSelect" class="form-label font-weight-bold"><i class="fas fa-user me-1 text-secondary"></i> 1. 選擇要更新的聯絡人</label>
+                        <select name="contact_id" id="contactSelect" class="form-select" onchange="toggleNewContactName()" required>
+                            <option value="new" {% if not contact_id or contact_id == 'new' %}selected{% endif %}>-- 新增為全新聯絡人 --</option>
+                            {% for c in contacts %}
+                            <option value="{{ c.id }}" {% if contact_id == c.id %}selected{% endif %}>{{ c.name }} (來源: {{ c.source or '-' }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- 全新聯絡人姓名輸入 (預設顯示) -->
+                    <div class="mb-4" id="newContactNameGroup">
+                        <label for="newContactName" class="form-label font-weight-bold"><i class="fas fa-signature me-1 text-secondary"></i> 聯絡人姓名 (選填)</label>
+                        <input type="text" name="new_contact_name" id="newContactName" class="form-control" placeholder="輸入姓名（若留空，AI 將會從文本中自動提取或命名）" value="{{ new_contact_name or '' }}">
+                    </div>
+
+                    <!-- 資料輸入文字框 -->
+                    <div class="mb-4">
+                        <label for="rawText" class="form-label font-weight-bold"><i class="fas fa-file-alt me-1 text-secondary"></i> 2. 請提供對話、自介或筆記資料 *</label>
+                        <textarea name="raw_text" id="rawText" class="form-control" rows="8" placeholder="範例：
+我今天跟小明聊到，他目前在科技公司當軟體工程師，工時很長壓力很大。家裡有兩個小孩要養。他平常放假喜歡去爬山跟騎腳踏車。他最近希望能有多一點被動收入，打算明後年存錢買一間大一點的房子。另外他也提到最近胃不太好，常常胃食道逆流..." required>{{ raw_text or '' }}</textarea>
+                    </div>
+
+                    <!-- 提示訊息 -->
+                    <div class="alert alert-info py-3 mb-4" style="border-radius: 12px; font-size: 13px;">
+                        <h6 class="font-weight-bold mb-1"><i class="fas fa-info-circle"></i> AI 會自動為您處理：</h6>
+                        <ul class="mb-0 ps-3">
+                            <li>分析對話並提取 <strong>F (家庭)</strong>、<strong>O (工作)</strong>、<strong>R (興趣)</strong>、<strong>M (金錢)</strong>、<strong>D (夢想)</strong>、<strong>H (健康)</strong> 欄位資訊。</li>
+                            <li>自動生成關心與聊天話題、推薦時事話題、推薦缺漏欄位的引導問句。</li>
+                            <li>自動追加互動記錄並重新計算新人資料完整度。</li>
+                        </ul>
+                    </div>
+
+                    <!-- 送出按鈕 -->
+                    <div class="d-grid">
+                        <button type="submit" id="submitBtn" class="btn btn-primary btn-lg font-weight-bold" style="border-radius: 12px; padding: 12px;">
+                            <i class="fas fa-paper-plane me-1"></i> 🚀 開始 AI 智慧建檔
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Loading 狀態遮罩 -->
+                <div id="loadingBox" class="text-center py-5" style="display: none;">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h5 class="mt-4 font-weight-bold text-dark">🚀 AI 智慧建檔中...</h5>
+                    <p class="text-muted" style="font-size: 14px;">正在分析文字、辨識 FORMDH 資訊並建立檔案，這大約需要 5-15 秒，請勿關閉網頁...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function toggleNewContactName() {
+        const select = document.getElementById("contactSelect");
+        const nameGroup = document.getElementById("newContactNameGroup");
+        if (select.value === "new") {
+            nameGroup.style.display = "block";
+        } else {
+            nameGroup.style.display = "none";
+        }
+    }
+
+    function showLoadingState() {
+        // 隱藏表單，顯示載入動畫
+        document.getElementById("aiImportForm").style.display = "none";
+        document.getElementById("loadingBox").style.display = "block";
+        document.querySelector(".page-header p").innerText = "AI 正在極速讀取並解析您的文字中...";
+    }
+
+    // 頁面載入後自動執行判斷，確保保留先前資料時顯示狀態正確
+    window.addEventListener('DOMContentLoaded', toggleNewContactName);
+</script>
+{% endblock %}

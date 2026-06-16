@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="auth-page">
+    <div class="auth-box">
+        <h1>📋 覺醒行動app</h1>
+        <p class="subtitle">團隊CRM管理系統</p>
+        <form method="post">
+            <div class="form-group">
+                <label>帳號</label>
+                <input type="text" name="username" class="form-control" placeholder="請輸入帳號" required>
+            </div>
+            <div class="form-group">
+                <label>密碼</label>
+                <input type="password" name="password" class="form-control" placeholder="請輸入密碼" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">登入</button>
+        </form>
+        <hr style="margin: 20px 0;">
+        <p style="text-align:center;font-size:13px;">
+            還沒有帳號？
+            <a href="{{ url_for('register') }}" style="color:#1a3a5c;font-weight:600;">立即註冊</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

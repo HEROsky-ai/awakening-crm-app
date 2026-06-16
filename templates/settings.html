@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h1>⚙️ 設定</h1>
+</div>
+
+{% if not storage_configured %}
+<div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb;margin-bottom:20px;">
+    <div style="font-size:15px;font-weight:600;color:#92400e;">
+        👋 第一次使用！請先設定儲存位置
+    </div>
+    <div style="font-size:13px;color:#92400e;margin-top:4px;">
+        選擇一個雲端資料夾，之後不管電腦怎麼換，資料都還在
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header"><span>📁 資料儲存位置</span></div>
+    <div style="font-size:14px;line-height:2;">
+        {% if storage_configured %}
+        <p>目前位置：<strong>{{ storage.type }}</strong></p>
+        <p>路徑：<code>{{ storage.path }}</code></p>
+        <p>資料庫大小：<strong>{{ storage.size }}</strong></p>
+        {% else %}
+        <p>尚未設定</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><span>☁️ 設定雲端儲存位置</span></div>
+    <p style="font-size:13px;color:#555;margin-bottom:12px;">
+        把路徑改成你的雲端同步資料夾，支援：
+    </p>
+    <ul style="font-size:13px;color:#555;margin-bottom:12px;padding-left:20px;">
+        <li><strong>OneDrive</strong>（推薦，Windows 內建）<br>
+            例如：C:\Users\你的名字\OneDrive\覺醒CRM</li>
+        <li><strong>Google Drive</strong>（自動同步 NotebookLM）<br>
+            例如：G:\覺醒CRM（需先安裝 Google Drive 桌面版）</li>
+        <li><strong>iCloud</strong><br>
+            例如：C:\Users\你的名字\iCloud Drive\覺醒CRM</li>
+        <li><strong>Dropbox</strong><br>
+            例如：C:\Users\你的名字\Dropbox\覺醒CRM</li>
+        <li><strong>NAS / 網路磁碟機</strong><br>
+            例如：\\192.168.1.100\共用\覺醒CRM</li>
+    </ul>
+    <form method="post" action="{{ url_for('set_storage') }}">
+        <div class="form-group">
+            <label>儲存路徑</label>
+            <input type="text" name="storage_path" class="form-control"
+                   placeholder="例如：C:\Users\你的名字\OneDrive\覺醒CRM"
+                   value="{{ storage.path if storage.path else '' }}">
+        </div>
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save"></i> 儲存設定
+        </button>
+    </form>
+    {% if storage_configured %}
+    <div style="margin-top:10px;font-size:12px;color:#10b981;">
+        ✅ 已設定完成，變更後<strong>請重新啟動 App</strong>才會生效
+    </div>
+    {% endif %}
+</div>
+
+
+
+<div class="card">
+    <div class="card-header"><span>📱 手機連線操作與同步</span></div>
+    <p style="font-size:13px;color:#555;margin-bottom:12px;">
+        您可以在手機上同步操作本系統（包括拍照建檔、新增客戶、勾選待辦等）。介面會自動適應手機螢幕大小。
+    </p>
+    
+    {% if tailscale_ip %}
+    <div style="background:#e0f2fe; border-left: 4px solid #0284c7; padding:15px; border-radius:12px; font-size:13px; color:#0369a1; margin-bottom:15px;">
+        <h6 style="font-weight:700;"><i class="fas fa-shield-alt"></i> ✨ 偵測到您已啟用 Tailscale 安全通道！</h6>
+        <p class="mb-0">
+            現在即使手機使用 <strong>4G/5G 行動網路或外部 Wi-Fi</strong>，只要手機開啟 Tailscale App 連線，即可安全地使用此網址或掃描下方 QR Code 操作。
+        </p>
+    </div>
+    {% else %}
+    <div style="background:#fffbeb; border-left: 4px solid #d97706; padding:15px; border-radius:12px; font-size:13px; color:#b45309; margin-bottom:15px;">
+        <h6 style="font-weight:700;"><i class="fas fa-info-circle"></i> 💡 提示：如何在外使用不同的網路連線？</h6>
+        <p class="mb-0">
+            若希望在外（手機使用 4G/5G 網路，電腦在辦公室/家裡）也能新增資料，建議至 <a href="https://tailscale.com" target="_blank" style="text-decoration:underline;">Tailscale 官網</a> 下載安裝此免費且極安全的虛擬專網工具，安裝後此處會自動為您轉換為安全固定網址與專屬 QR Code！
+        </p>
+    </div>
+    {% endif %}
+
+    <div style="background:#f8fafc; padding:15px; border-radius:12px; font-size:13px; color:#334155;">
+        <h6 style="font-weight:700;"><i class="fas fa-wifi"></i> 連線網址與 QR Code：</h6>
+        <ol style="margin-bottom:12px; padding-left:20px;">
+            {% if tailscale_ip %}
+            <li><strong>手機外網 (4G/5G) 連線</strong>：請開啟手機 Tailscale，並輸入或掃碼：<br>
+                <span style="font-weight:700; color:#0284c7;">http://{{ tailscale_ip }}:5000</span>
+            </li>
+            <li><strong>同一個 Wi-Fi 內網連線</strong>：輸入或掃碼：<br>
+                <span style="font-weight:600; color:#64748b;">http://{{ local_ip }}:5000</span>
+            </li>
+            {% else %}
+            <li>確保您的<strong>手機</strong>與這台<strong>電腦</strong>連接到<strong>同一個 Wi-Fi 網路</strong>。</li>
+            <li>在手機瀏覽器中輸入下方網址，或用手機相機掃描 QR Code 連線：<br>
+                <span style="font-weight:700; color:#4f46e5;">http://{{ local_ip }}:5000</span>
+            </li>
+            {% endif %}
+        </ol>
+        <div class="text-center py-2">
+            <div id="qrcode" class="d-flex justify-content-center"></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><span>🔄 自動同步 NotebookLM</span></div>
+    <p style="font-size:13px;color:#555;margin-bottom:12px;">
+        每次新增/修改聯絡人，自動更新 <code>覺醒CRM_NotebookLM.md</code><br>
+        NotebookLM 設為從本機上傳，就能自動看到最新資料
+    </p>
+    <div style="font-size:13px;color:#10b981;">
+        ✅ 自動同步已啟用（每次資料變動時自動更新）
+    </div>
+    <hr>
+    <p style="font-size:13px;color:#555;margin-bottom:12px;">
+        <strong>使用方式：</strong>
+    </p>
+    <ol style="font-size:13px;color:#555;padding-left:20px;">
+        <li>打開 <a href="https://notebooklm.google.com" target="_blank">NotebookLM</a></li>
+        <li>新增 Notebook → 上傳來源 → 選擇 <code>覺醒CRM_NotebookLM.md</code></li>
+        <li>之後每次資料更新，重新上傳一次 .md 檔即可</li>
+        <li>如果用 Google Drive，可設為自動同步（實驗功能）</li>
+    </ol>
+</div>
+
+<div class="card">
+    <div class="card-header"><span>🤖 AI 智慧分析 API 金鑰設定</span></div>
+    <p style="font-size:13px;color:#555;margin-bottom:12px;">
+        若要啟用 AI 文字智慧建檔功能，請設定您的 API 金鑰。
+    </p>
+    <form method="post" action="{{ url_for('set_keys') }}">
+        <div class="mb-3">
+            <label class="form-label font-weight-bold" style="font-size:13px;">Google Gemini API Key</label>
+            <input type="password" name="gemini_api_key" class="form-control form-control-sm"
+                   placeholder="輸入您的 Gemini API Key"
+                   value="{{ gemini_api_key or '' }}">
+            <div class="form-text" style="font-size:11px;color:#666;">
+                請前往 <a href="https://aistudio.google.com/" target="_blank" style="text-decoration:underline;">Google AI Studio</a> 免費申請。
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label font-weight-bold" style="font-size:13px;">OpenRouter API Key (備用通道)</label>
+            <input type="password" name="openrouter_api_key" class="form-control form-control-sm"
+                   placeholder="輸入您的 OpenRouter API Key"
+                   value="{{ openrouter_api_key or '' }}">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">
+            <i class="fas fa-save"></i> 儲存 API 金鑰
+        </button>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header"><span>🔔 LINE Notify 手機推播通知設定</span></div>
+    <p style="font-size:13px;color:#555;margin-bottom:12px;">
+        啟用後，系統會自動在背景將「今日關心進度」、「待辦與逾期關心名單」推播至您的手機 LINE，讓您不漏接任何跟進計畫！
+    </p>
+    <form method="post" action="{{ url_for('set_line_notify') }}">
+        <div class="mb-3">
+            <label class="form-label font-weight-bold" style="font-size:13px;">LINE Notify Token (存取權杖)</label>
+            <input type="password" name="line_notify_token" id="line_notify_token" class="form-control form-control-sm"
+                   placeholder="請輸入 LINE Notify Token"
+                   value="{{ line_notify_token or '' }}">
+            <div class="form-text" style="font-size:11px;color:#666;margin-top:6px;line-height:1.5;">
+                💡 <strong>如何取得免費 Token？</strong><br>
+                1. 開啟 <a href="https://notify-bot.line.me/" target="_blank" style="text-decoration:underline;color:#059669;">LINE Notify 官方網站</a> 並登入您的 LINE 帳號。<br>
+                2. 點選右上角個人姓名 → 選擇 <strong>「個人頁面」</strong>。<br>
+                3. 點選下方 <strong>「發行權杖」</strong> 按鈕。<br>
+                4. 輸入權杖名稱（例如：<code>覺醒行動app</code>），並選擇 <strong>「透過1對1聊天接收LINE Notify通知」</strong>（或指定的群組）。<br>
+                5. 點選「發行」並複製權杖，貼回此處並儲存即可！
+            </div>
+        </div>
+        <div class="mb-3 form-check form-switch" style="padding-left: 2.5em;margin-top: 10px;">
+            <input class="form-check-input" type="checkbox" name="enable_line_notify" id="enable_line_notify" {% if enable_line_notify %}checked{% endif %}>
+            <label class="form-check-label font-weight-bold" for="enable_line_notify" style="font-size:13px;cursor:pointer;">
+                啟用手機 LINE 推播訊息通知
+            </label>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="fas fa-save"></i> 儲存通知設定
+            </button>
+            <button type="button" id="btn-test-notify" class="btn btn-secondary btn-sm" style="background-color: #059669; border-color: #059669; color:#fff;">
+                <i class="fas fa-paper-plane"></i> 發送測試通知
+            </button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header"><span>🔔 ntfy 手機推播通知設定 (推薦，無需註冊，完全免費)</span></div>
+    <p style="font-size:13px;color:#555;margin-bottom:12px;">
+        ntfy 是一個極簡的通知推播工具。不需建立帳號，只需下載 ntfy App 並在下方設定一個獨特的主題名稱 (Topic)，即可在手機背景接收未完成任務與跟進提醒！
+    </p>
+    <form method="post" action="{{ url_for('set_ntfy') }}">
+        <div class="mb-3">
+            <label class="form-label font-weight-bold" style="font-size:13px;">ntfy 訂閱主題 (Topic)</label>
+            <input type="text" name="ntfy_topic" id="ntfy_topic" class="form-control form-control-sm"
+                   placeholder="輸入一個不易重複的英文主題名稱，例如：awake_crm_12345"
+                   value="{{ ntfy_topic or '' }}">
+            <div class="form-text" style="font-size:11px;color:#666;margin-top:6px;line-height:1.5;">
+                💡 <strong>如何設定？</strong><br>
+                1. 手機下載並安裝 <strong>ntfy</strong> App（可在 iOS App Store 或 Android Google Play 免費下載）。<br>
+                2. 打開手機 ntfy App，點擊右上角的「+」號。<br>
+                3. 在 Topic name 輸入框中填入一個自訂的英文名稱（例如：<code>awake_crm_12345</code>），然後點擊 「Subscribe」訂閱。<br>
+                4. 在下方欄位填入**完全相同**的名稱，儲存並發送測試即可！
+            </div>
+        </div>
+        <div class="mb-3 form-check form-switch" style="padding-left: 2.5em;margin-top: 10px;">
+            <input class="form-check-input" type="checkbox" name="enable_ntfy" id="enable_ntfy" {% if enable_ntfy %}checked{% endif %}>
+            <label class="form-check-label font-weight-bold" for="enable_ntfy" style="font-size:13px;cursor:pointer;">
+                啟用手機 ntfy 推播訊息通知
+            </label>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="fas fa-save"></i> 儲存 ntfy 設定
+            </button>
+            <button type="button" id="btn-test-ntfy" class="btn btn-secondary btn-sm" style="background-color: #0284c7; border-color: #0284c7; color:#fff;">
+                <i class="fas fa-paper-plane"></i> 發送 ntfy 測試通知
+            </button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header"><span>🤖 匯出 NotebookLM Source</span></div>
+    <p style="font-size:13px;color:#555;margin-bottom:12px;">
+        一鍵匯出結構化 Markdown，直接丟進 <strong>Google NotebookLM</strong> 當 Source<br>
+        NotebookLM 就能幫你分析客戶、推薦話題、找切入點
+    </p>
+    <a href="{{ url_for('export_notebooklm') }}" class="btn btn-primary" style="background:#7c3aed;">
+        <i class="fas fa-robot"></i> 匯出 NotebookLM Markdown
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header"><span>💾 匯出 JSON 備份</span></div>
+    <p style="font-size:13px;color:#555;margin-bottom:12px;">
+        將所有聯絡人資料下載為 JSON 備份檔
+    </p>
+    <a href="{{ url_for('export_data') }}" class="btn btn-success">
+        <i class="fas fa-download"></i> 下載備份
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header"><span>📖 使用說明</span></div>
+    <div style="font-size:13px;line-height:2;color:#555;">
+        <p><strong>1. 先設儲存位置</strong><br>第一次使用先選 OneDrive / Google Drive 等雲端資料夾</p>
+        <p><strong>2. 新增聯絡人</strong><br>每次認識新人，馬上建立檔案</p>
+        <p><strong>3. 填寫 FORMDH</strong><br>慢慢收集對方資訊，越完整越好</p>
+        <p><strong>4. 記錄每一次互動</strong><br>聊天後趁記憶猶新時記錄</p>
+        <p><strong>5. 系統自動提醒</strong><br>25天沒聯繫的人會自動標記</p>
+        <p><strong>6. 智能更新</strong><br>點右下角魔法棒圖示，用文字或圖片快速更新資料</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+        const connectUrl = "{% if tailscale_ip %}http://{{ tailscale_ip }}:5000{% else %}http://{{ local_ip }}:5000{% endif %}";
+        new QRCode(document.getElementById("qrcode"), {
+            text: connectUrl,
+            width: 140,
+            height: 140
+        });
+
+        // 測試 LINE Notify 按鈕
+        document.getElementById('btn-test-notify').addEventListener('click', function() {
+            const token = document.getElementById('line_notify_token').value.trim();
+            const btn = this;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 發送中...';
+            
+            fetch('/settings/line_notify/test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ line_notify_token: token })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> 發送測試通知';
+                if(data.success) {
+                    alert(data.message);
+                } else {
+                    alert('❌ ' + data.message);
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> 發送測試通知';
+                alert('❌ 連線伺服器失敗，請確認 App 是否正常運行');
+            });
+        });
+
+        // 測試 ntfy 按鈕
+        document.getElementById('btn-test-ntfy').addEventListener('click', function() {
+            const topic = document.getElementById('ntfy_topic').value.trim();
+            const btn = this;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 發送中...';
+            
+            fetch('/settings/ntfy/test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ntfy_topic: topic })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> 發送 ntfy 測試通知';
+                if(data.success) {
+                    alert(data.message);
+                } else {
+                    alert('❌ ' + data.message);
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> 發送 ntfy 測試通知';
+                alert('❌ 連線伺服器失敗，請確認 App 是否正常運行');
+            });
+        });
+</script>
+{% endblock %}

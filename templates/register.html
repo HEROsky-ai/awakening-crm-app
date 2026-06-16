@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="auth-page">
+    <div class="auth-box">
+        <h1>📝 註冊帳號</h1>
+        <p class="subtitle">加入覺醒行動app團隊</p>
+        <form method="post">
+            <div class="form-group">
+                <label>帳號</label>
+                <input type="text" name="username" class="form-control" placeholder="建議用英文或數字" required>
+                <small style="color:#999;">每個人的帳號必須唯一，不可重複</small>
+            </div>
+            <div class="form-group">
+                <label>顯示名稱</label>
+                <input type="text" name="display_name" class="form-control" placeholder="例如：王小美">
+            </div>
+            <div class="form-group">
+                <label>密碼</label>
+                <input type="password" name="password" class="form-control" placeholder="至少4個字元" required minlength="4">
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">註冊</button>
+        </form>
+        <p style="text-align:center;margin-top:16px;font-size:13px;">
+            已經有帳號？
+            <a href="{{ url_for('login') }}" style="color:#1a3a5c;font-weight:600;">登入</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

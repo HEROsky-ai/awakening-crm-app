@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Databases and user data
+data/
+*.db
+exports/
+uploads/
+
+# Configuration and API keys
+storage_config.json
+config.yaml
+google_credentials.json
+google_token.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/

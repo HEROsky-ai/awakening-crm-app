@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <div>
+        <h1>📅 互動規劃</h1>
+        <p>月底前需要關心的聯絡人</p>
+    </div>
+    <a href="{{ url_for('auto_schedule') }}" class="btn btn-primary">
+        <i class="fas fa-magic"></i> 自動建立事件
+    </a>
+</div>
+
+<div class="card">
+    {% if plan %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>優先級</th>
+                    <th>姓名</th>
+                    <th>未互動天數</th>
+                    <th>上次互動</th>
+                    <th>原因</th>
+                    <th>建議日期</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in plan %}
+                <tr class="priority-{{ item.priority }}">
+                    <td>
+                        {% if item.priority == 'high' %}
+                        <span class="badge badge-high">🔴 高</span>
+                        {% elif item.priority == 'medium' %}
+                        <span class="badge badge-medium">🟡 中</span>
+                        {% else %}
+                        <span class="badge badge-low">🟢 低</span>
+                        {% endif %}
+                    </td>
+                    <td><strong>{{ item.contact.name }}</strong></td>
+                    <td>{{ item.days_since if item.days_since < 999 else '從未' }}</td>
+                    <td>{{ item.contact.last_interaction or '從未' }}</td>
+                    <td style="font-size:13px;color:#666;">{{ item.reason }}</td>
+                    <td>{{ item.suggested_date }}</td>
+                    <td>
+                        <a href="{{ url_for('view_contact', contact_id=item.contact.id) }}" class="btn btn-sm btn-outline">關心</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-check-circle" style="color:#10b981;"></i>
+        <p>✅ 所有聯絡人近期都有互動！</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

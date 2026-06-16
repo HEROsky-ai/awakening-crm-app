@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <div>
+        <h1>👥 聯絡人</h1>
+        <p>共 {{ contacts|length }} 人</p>
+    </div>
+    <a href="{{ url_for('add_contact') }}" class="btn btn-primary"><i class="fas fa-plus"></i> 新增</a>
+</div>
+
+<form class="search-bar" method="get">
+    <input type="text" name="keyword" class="form-control" placeholder="搜尋姓名、來源、標籤..." value="{{ keyword }}">
+    <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> 搜尋</button>
+    {% if keyword %}<a href="{{ url_for('contact_list') }}" class="btn btn-outline">清除</a>{% endif %}
+</form>
+
+<div class="card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>姓名</th>
+                    <th>來源</th>
+                    <th>標籤</th>
+                    <th>最後互動</th>
+                    <th>互動次數</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in contacts %}
+                <tr>
+                    <td><strong>{{ c.name }}</strong></td>
+                    <td>{{ c.source or '-' }}</td>
+                    <td>
+                        {% for tag in (c.tags|fromjson if c.tags else []) %}
+                        <span class="tag tag-{% if tag in ['新人','高潛力'] %}green{% elif tag == '待追蹤' %}orange{% elif tag == '已成交' %}blue{% elif tag == '放棄' %}red{% else %}purple{% endif %}">
+                            {{ tag }}
+                        </span>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% if c.last_interaction %}
+                        {{ c.last_interaction }}
+                        {% else %}
+                        <span style="color:#dc2626;font-size:12px;">從未</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ c.interaction_count }}</td>
+                    <td>
+                        <div class="btn-group">
+                            <a href="{{ url_for('view_contact', contact_id=c.id) }}" class="btn btn-sm btn-primary">查看</a>
+                            <a href="{{ url_for('edit_contact', contact_id=c.id) }}" class="btn btn-sm btn-outline">編輯</a>
+                            <a href="{{ url_for('delete_contact', contact_id=c.id) }}" class="btn btn-sm btn-danger" 
+                               onclick="return confirm('確定刪除 {{ c.name }}？將一併刪除所有記錄')">刪除</a>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6">
+                    <div class="empty-state">
+                        <p>📭 尚無聯絡人</p>
+                        <a href="{{ url_for('add_contact') }}" class="btn btn-primary" style="margin-top:12px;">
+                            新增第一位聯絡人
+                        </a>
+                    </div>
+                </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

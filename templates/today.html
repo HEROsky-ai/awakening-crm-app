@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h1>🔔 今日待辦</h1>
+    <p>系統自動計算哪些聯絡人需要關心</p>
+</div>
+
+<!-- 今日排定聊天計畫 -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>📅 今日排定聊天計畫</span>
+        <span class="badge bg-secondary">{{ today_events|length }} 個計劃</span>
+    </div>
+    {% if today_events %}
+    <ul style="list-style:none; padding: 0; margin: 0;">
+        {% for event in today_events %}
+        <li style="padding:15px 20px; border-bottom:1px solid #f0f0f0; display: flex; align-items: center;">
+            {% if event.status == 'completed' %}
+            <div class="me-3" style="font-size: 22px; color: var(--success); cursor: default;"><i class="fas fa-check-square"></i></div>
+            {% else %}
+            <div class="me-3" style="font-size: 22px; color: var(--primary); cursor: pointer;" onclick="triggerCompleteModal('{{ event.id }}', '{{ event.contact_name }}')"><i class="far fa-square"></i></div>
+            {% endif %}
+            <div class="flex-grow-1">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <strong style="font-size:15px;">{{ event.contact_name }}</strong>
+                        <span style="font-size: 12px; color: #6b7280; margin-left: 8px;"><i class="far fa-clock"></i> {{ event.event_time }}</span>
+                        {% if event.status == 'completed' %}
+                        <span class="badge bg-success" style="font-size:11px; margin-left: 8px;">已完成</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark" style="font-size:11px; margin-left: 8px;">待處理</span>
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% if event.status == 'pending' %}
+                        <button onclick="triggerCompleteModal('{{ event.id }}', '{{ event.contact_name }}')" class="btn btn-success btn-sm me-1"><i class="fas fa-check"></i> 完成</button>
+                        <a href="{{ url_for('view_contact', contact_id=event.contact_id) }}" class="btn btn-outline-primary btn-sm"><i class="fas fa-comment"></i> 去聊天</a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div style="font-size:13px; color:#374151; margin-top:4px;">{{ event.title }}</div>
+                {% if event.description %}
+                <div style="font-size:12px; color:#6b7280; margin-top:2px;">{{ event.description }}</div>
+                {% endif %}
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="text-center py-4 text-muted">
+        <i class="far fa-calendar-times" style="font-size:32px; color: #cbd5e1;"></i>
+        <p style="margin-top:8px; font-size: 13px; margin-bottom: 0;">今天沒有排定關心計畫，可使用自動規劃功能或手動新增！</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-header"><span>🔥 優先關心</span></div>
+    {% if tasks %}
+    <ul style="list-style:none;">
+        {% for task in tasks %}
+        <li style="padding:12px 0;border-bottom:1px solid #f0f0f0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <strong style="font-size:15px;">{{ task.name }}</strong>
+                    <span class="badge badge-high" style="margin-left:8px;font-size:11px;">高優先</span>
+                    <div style="font-size:13px;color:#666;margin-top:4px;">{{ task.reason }}</div>
+                    <div style="font-size:13px;color:#8b5cf6;margin-top:2px;">💡 {{ task.suggestion }}</div>
+                </div>
+                <a href="{{ url_for('view_contact', contact_id=task.contact_id) }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-comment"></i> 去關心
+                </a>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-check-circle" style="color:#10b981;font-size:32px;"></i>
+        <p style="margin-top:8px;">✅ 今日無優先事項！</p>
+    </div>
+    {% endif %}
+</div>
+
+{% if overdue %}
+<div class="card" style="border-left:3px solid #dc2626;">
+    <div class="card-header">
+        <span>⚠️ 逾期未聯繫（{{ overdue|length }} 人）</span>
+        <span style="font-size:13px;color:#666;">超過25天未互動</span>
+    </div>
+    <ul style="list-style:none;">
+        {% for c in overdue[:5] %}
+        <li style="padding:8px 0;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f0f0f0;">
+            <span><strong>{{ c.name }}</strong></span>
+            <a href="{{ url_for('view_contact', contact_id=c.id) }}" class="btn btn-sm btn-danger">立即關心</a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<!-- 聊天完成備註 Modal -->
+<div class="modal fade" id="completeEventModal" tabindex="-1" aria-labelledby="completeEventModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" style="border-radius: 16px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: white; border-top-left-radius: 16px; border-top-right-radius: 16px;">
+                <h5 class="modal-title font-weight-bold" id="completeEventModalLabel"><i class="fas fa-check-circle"></i> 完成聊天記錄</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="completeEventForm" method="post">
+                <div class="modal-body p-4">
+                    <p class="text-muted" style="font-size: 14px;">與 <strong id="modalContactName" class="text-primary"></strong> 的聊天任務已完成。請記錄本次聊天進度，系統將自動同步更新至新人的資訊備註中：</p>
+                    <div class="mb-3">
+                        <label for="chatProgressInput" class="form-label font-weight-bold" style="font-size: 13px;">聊天互動內容/進度 (選填)</label>
+                        <textarea name="chat_progress" id="chatProgressInput" class="form-control" rows="4" placeholder="例如：聊了最近的工作狀況，他對我們的健康食品感興趣，下次可以約喝咖啡..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid #f1f5f9; background-color: #f8fafc; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-success"><i class="fas fa-save"></i> 儲存並標記完成</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function triggerCompleteModal(eventId, contactName) {
+        const form = document.getElementById("completeEventForm");
+        form.action = `/calendar/complete_with_notes/${eventId}`;
+        document.getElementById("modalContactName").innerText = contactName;
+        document.getElementById("chatProgressInput").value = "";
+        
+        const modal = new bootstrap.Modal(document.getElementById('completeEventModal'));
+        modal.show();
+    }
+</script>
+{% endblock %}

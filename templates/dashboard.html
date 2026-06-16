@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h1>👋 歡迎回來</h1>
+    <p>管理客戶關係，系統幫你記得</p>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="icon">👥</div>
+        <div class="num">{{ total }}</div>
+        <div class="label">總聯絡人</div>
+    </div>
+    <div class="stat-card">
+        <div class="icon">🆕</div>
+        <div class="num">{{ new_this_month }}</div>
+        <div class="label">本月新人</div>
+    </div>
+    <div class="stat-card">
+        <div class="icon">💬</div>
+        <div class="num">{{ month_interactions }}</div>
+        <div class="label">本月互動次數</div>
+    </div>
+    <div class="stat-card">
+        <div class="icon">⚠️</div>
+        <div class="num" {% if overdue > 0 %}style="color:#dc2626;"{% endif %}>{{ overdue }}</div>
+        <div class="label">逾期未聯繫</div>
+    </div>
+    <div class="stat-card">
+        <div class="icon">📊</div>
+        <div class="num">{{ completeness_avg }}%</div>
+        <div class="label">FORMDH 完整度</div>
+    </div>
+</div>
+
+<div class="card" style="margin-top:16px;background:#e8f0fe;border-left:3px solid #1a3a5c;">
+    <div style="font-size:13px;color:#555;">
+        📁 <strong>儲存位置：</strong>{{ storage.type }} &nbsp;|&nbsp; {{ storage.size }}
+        &nbsp;|&nbsp; <a href="{{ url_for('settings') }}" style="color:#1a3a5c;"><i class="fas fa-cog"></i> 更改位置</a>
+    </div>
+</div>
+
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">
+        <span>🔔 今日優先關心</span>
+        <a href="{{ url_for('today_view') }}" class="btn btn-sm btn-outline">查看全部</a>
+    </div>
+    {% if today_tasks %}
+    <ul style="list-style:none;">
+        {% for task in today_tasks %}
+        <li style="padding:8px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;">
+            <span>
+                <strong>{{ task.name }}</strong>
+                <span style="color:#666;font-size:13px;margin-left:8px;">- {{ task.reason }}</span>
+            </span>
+            <a href="{{ url_for('view_contact', contact_id=task.contact_id) }}" class="btn btn-sm btn-outline">關心</a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">
+        <p>✅ 今日無待辦事項</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span>❓ 快速操作</span>
+    </div>
+    <div class="btn-group" style="gap:10px;">
+        <a href="{{ url_for('add_contact') }}" class="btn btn-primary"><i class="fas fa-plus"></i> 新增聯絡人</a>
+        <a href="{{ url_for('plan_view') }}" class="btn btn-outline"><i class="fas fa-calendar-check"></i> 本月的</a>
+        <a href="{{ url_for('calendar_view') }}" class="btn btn-outline"><i class="fas fa-calendar-alt"></i> 行事曆</a>
+    </div>
+</div>
+
+{% endblock %}
