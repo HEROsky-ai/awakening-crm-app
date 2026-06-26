@@ -5,11 +5,26 @@
 </div>
 
 <div class="card" style="max-width:500px;">
-    <form method="post">
+    <form method="post" enctype="multipart/form-data">
         <div class="form-group">
             <label>姓名</label>
             <input type="text" name="name" class="form-control" value="{{ contact.name }}" required>
         </div>
+        
+        {% if contact.image_path %}
+        <div class="form-group">
+            <label>目前圖片</label>
+            <div style="margin-bottom: 10px;">
+                <img src="{{ url_for('send_upload', filename=contact.image_path) }}" alt="{{ contact.name }}" style="max-width: 150px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="form-group">
+            <label>上傳/更新圖片</label>
+            <input type="file" name="image" class="form-control" accept="image/*">
+        </div>
+
         <div class="form-group">
             <label>來源</label>
             <select name="source" class="form-control">
@@ -19,7 +34,31 @@
                 {% endfor %}
             </select>
         </div>
+
         <div class="form-group">
+            <label>來源 App</label>
+            <input type="text" name="from_app" list="app-options" class="form-control" value="{{ contact.from_app or '' }}" placeholder="請輸入或選擇來源 App">
+            <datalist id="app-options">
+                <option value="LINE"></option>
+                <option value="Instagram"></option>
+                <option value="WeChat"></option>
+                <option value="Facebook Messenger"></option>
+                <option value="WhatsApp"></option>
+                <option value="Threads"></option>
+            </datalist>
+        </div>
+
+        <div class="form-group mb-3">
+            <label>名單分類 (A / B / C 類)</label>
+            <select name="category" class="form-control">
+                <option value="">無分類</option>
+                <option value="A" {% if current_category == 'A' %}selected{% endif %}>A 類 (知道安麗，態度好肯學習肯改變，晚上有時間出來學習7：30-9：30)</option>
+                <option value="B" {% if current_category == 'B' %}selected{% endif %}>B 類 (還不知安麗，時間有但需要溝通，才願意出來 想改變學習)</option>
+                <option value="C" {% if current_category == 'C' %}selected{% endif %}>C 類 (不論知不知道安麗，時間非常不固定，態度差，不想改，負面偏多等)</option>
+            </select>
+        </div>
+
+        <div class="form-group mb-3">
             <label>標籤（用逗號分隔）</label>
             <input type="text" name="tags" class="form-control" value="{{ tags_str }}">
         </div>

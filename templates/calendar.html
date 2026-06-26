@@ -75,70 +75,155 @@
     }
     
     .day-cell {
-        aspect-ratio: 1.1;
+        min-height: 85px;
+        height: auto;
         border-radius: 12px;
         padding: 6px;
         display: flex;
         flex-direction: column;
-        justify-content: space-between;
+        justify-content: flex-start;
         cursor: pointer;
         transition: all 0.2s;
-        border: 1px solid #f9fafb;
+        border: 1px solid #e5e7eb;
         background: #fdfdfd;
         position: relative;
     }
     
     .day-cell:hover {
-        background: #eef2ff;
+        background: #f3f4f6;
         transform: translateY(-2px);
+    }
+    
+    .day-num-wrapper {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 4px;
     }
     
     .day-num {
         font-weight: 600;
         color: #374151;
-        font-size: 14px;
+        font-size: 13px;
+        width: 22px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
     }
     
     .other-month {
         opacity: 0.3;
         background: none;
         pointer-events: none;
+        border-color: transparent;
     }
     
     .today-cell {
-        border: 2px solid var(--primary);
         background: #f5f3ff;
     }
     
-    .selected-cell {
-        background: var(--primary) !important;
-        border-color: var(--primary);
-    }
-    
-    .selected-cell .day-num {
-        color: white;
-    }
-    
-    /* 聊天人數標籤 */
-    .chat-count-badge {
-        font-size: 10px;
+    .today-cell .day-num {
+        background: var(--primary);
+        color: white !important;
         font-weight: 700;
-        background: #10b981;
-        color: white;
+    }
+    
+    .selected-cell {
+        background: #eef2ff !important;
+        border: 1px solid var(--primary) !important;
+        box-shadow: 0 0 0 1px var(--primary);
+    }
+    
+    /* 桌機端事件列表 */
+    .day-events-list {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        width: 100%;
+        margin-top: 2px;
+    }
+    
+    .day-event-item {
+        font-size: 10px;
+        line-height: 1.2;
         padding: 2px 4px;
-        border-radius: 6px;
-        text-align: center;
+        border-radius: 4px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        display: block;
-        margin-top: auto;
+        background: #f3f4f6;
+        color: #374151;
+        border-left: 3px solid #6b7280;
+        text-align: left;
     }
     
-    .selected-cell .chat-count-badge {
-        background: white;
-        color: var(--primary);
+    .day-event-item.followup {
+        background-color: #ffedd5;
+        color: #c2410c;
+        border-left-color: #f97316;
     }
+    
+    .day-event-item.reminder {
+        background-color: #dbeafe;
+        color: #1d4ed8;
+        border-left-color: #3b82f6;
+    }
+    
+    .day-event-item.birthday {
+        background-color: #d1fae5;
+        color: #047857;
+        border-left-color: #10b981;
+    }
+    
+    .day-event-item.completed {
+        text-decoration: line-through;
+        opacity: 0.5;
+        background-color: #f3f4f6 !important;
+        color: #6b7280 !important;
+        border-left-color: #9ca3af !important;
+    }
+    
+    .day-event-item.cancelled {
+        text-decoration: line-through;
+        opacity: 0.3;
+        background-color: #f3f4f6 !important;
+        color: #9ca3af !important;
+        border-left-color: #d1d5db !important;
+    }
+
+    .day-events-more {
+        font-size: 9px;
+        color: #6b7280;
+        font-weight: 600;
+        text-align: center;
+        margin-top: 1px;
+    }
+    
+    /* 手機端事件點點 */
+    .day-events-dots {
+        display: flex;
+        justify-content: center;
+        gap: 3px;
+        margin-top: auto;
+        width: 100%;
+        padding-top: 2px;
+    }
+    
+    .day-event-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background-color: #6b7280;
+    }
+    
+    .day-event-dot.followup { background-color: #f97316; }
+    .day-event-dot.reminder { background-color: #3b82f6; }
+    .day-event-dot.birthday { background-color: #10b981; }
+    .day-event-dot.completed { background-color: #10b981; opacity: 0.5; }
+    .day-event-dot.cancelled { background-color: #9ca3af; opacity: 0.3; }
     
     /* 右側詳情區 */
     .detail-card {
@@ -253,9 +338,6 @@
         <p class="text-muted">追蹤年月日互動計劃，一目了然每天需要聊天的名單</p>
     </div>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('auto_schedule') }}" class="btn btn-outline-primary">
-            <i class="fas fa-magic"></i> 自動規劃關心事件
-        </a>
         <a href="{{ url_for('add_contact') }}" class="btn btn-primary">
             <i class="fas fa-plus"></i> 新增新人
         </a>
@@ -453,7 +535,11 @@
             const dayNum = prevMonthTotalDays - i;
             const cell = document.createElement("div");
             cell.className = "day-cell other-month";
-            cell.innerHTML = `<span class="day-num">${dayNum}</span>`;
+            cell.innerHTML = `
+                <div class="day-num-wrapper">
+                    <span class="day-num">${dayNum}</span>
+                </div>
+            `;
             daysGrid.appendChild(cell);
         }
         
@@ -476,16 +562,45 @@
             cell.setAttribute("data-date", dateStr);
             cell.onclick = () => selectDate(dateStr);
             
-            // 寫入日期數字
-            let innerHTML = `<span class="day-num">${day}</span>`;
-            
             // 檢查這天是否有聊天計劃
             const dayEvents = rawEvents.filter(e => e.event_date === dateStr);
-            const pendingEvents = dayEvents.filter(e => e.status === 'pending');
+            
+            // 建立 Day Header
+            let innerHTML = `
+                <div class="day-num-wrapper">
+                    <span class="day-num">${day}</span>
+                </div>
+            `;
             
             if (dayEvents.length > 0) {
-                // 有預計聊天
-                innerHTML += `<span class="chat-count-badge">💬 ${dayEvents.length}人聊天</span>`;
+                // 1. 桌機版顯示事件列表 (限顯示 2 個，超過顯示 +X)
+                let desktopHtml = `<div class="day-events-list d-none d-md-block">`;
+                const maxDisplay = 2;
+                const displayEvents = dayEvents.slice(0, maxDisplay);
+                displayEvents.forEach(e => {
+                    let statusClass = e.status === 'completed' ? 'completed' : e.status === 'cancelled' ? 'cancelled' : '';
+                    desktopHtml += `
+                        <div class="day-event-item ${e.event_type} ${statusClass}" title="${e.contact_name}: ${e.title}">
+                            ${e.contact_name}
+                        </div>
+                    `;
+                });
+                if (dayEvents.length > maxDisplay) {
+                    desktopHtml += `<div class="day-events-more">+${dayEvents.length - maxDisplay}</div>`;
+                }
+                desktopHtml += `</div>`;
+                
+                // 2. 手機版顯示事件圓點 (限顯示 3 個)
+                let mobileHtml = `<div class="day-events-dots d-flex d-md-none">`;
+                const maxDots = 3;
+                const dotEvents = dayEvents.slice(0, maxDots);
+                dotEvents.forEach(e => {
+                    let statusClass = e.status === 'completed' ? 'completed' : e.status === 'cancelled' ? 'cancelled' : '';
+                    mobileHtml += `<span class="day-event-dot ${e.event_type} ${statusClass}"></span>`;
+                });
+                mobileHtml += `</div>`;
+                
+                innerHTML += desktopHtml + mobileHtml;
             }
             
             cell.innerHTML = innerHTML;
@@ -498,7 +613,11 @@
         for (let day = 1; day <= remainingCells; day++) {
             const cell = document.createElement("div");
             cell.className = "day-cell other-month";
-            cell.innerHTML = `<span class="day-num">${day}</span>`;
+            cell.innerHTML = `
+                <div class="day-num-wrapper">
+                    <span class="day-num">${day}</span>
+                </div>
+            `;
             daysGrid.appendChild(cell);
         }
     }

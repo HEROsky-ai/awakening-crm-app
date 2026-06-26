@@ -92,15 +92,15 @@
         <ol style="margin-bottom:12px; padding-left:20px;">
             {% if tailscale_ip %}
             <li><strong>手機外網 (4G/5G) 連線</strong>：請開啟手機 Tailscale，並輸入或掃碼：<br>
-                <span style="font-weight:700; color:#0284c7;">http://{{ tailscale_ip }}:5000</span>
+                <span style="font-weight:700; color:#0284c7;">http://{{ tailscale_ip }}:{{ request.host.split(':')[-1] if ':' in request.host else '5000' }}</span>
             </li>
             <li><strong>同一個 Wi-Fi 內網連線</strong>：輸入或掃碼：<br>
-                <span style="font-weight:600; color:#64748b;">http://{{ local_ip }}:5000</span>
+                <span style="font-weight:600; color:#64748b;">http://{{ local_ip }}:{{ request.host.split(':')[-1] if ':' in request.host else '5000' }}</span>
             </li>
             {% else %}
             <li>確保您的<strong>手機</strong>與這台<strong>電腦</strong>連接到<strong>同一個 Wi-Fi 網路</strong>。</li>
             <li>在手機瀏覽器中輸入下方網址，或用手機相機掃描 QR Code 連線：<br>
-                <span style="font-weight:700; color:#4f46e5;">http://{{ local_ip }}:5000</span>
+                <span style="font-weight:700; color:#4f46e5;">http://{{ local_ip }}:{{ request.host.split(':')[-1] if ':' in request.host else '5000' }}</span>
             </li>
             {% endif %}
         </ol>
@@ -270,7 +270,7 @@
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-        const connectUrl = "{% if tailscale_ip %}http://{{ tailscale_ip }}:5000{% else %}http://{{ local_ip }}:5000{% endif %}";
+        const connectUrl = "{% if tailscale_ip %}http://{{ tailscale_ip }}:{{ request.host.split(':')[-1] if ':' in request.host else '5000' }}{% else %}http://{{ local_ip }}:{{ request.host.split(':')[-1] if ':' in request.host else '5000' }}{% endif %}";
         new QRCode(document.getElementById("qrcode"), {
             text: connectUrl,
             width: 140,

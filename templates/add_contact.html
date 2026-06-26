@@ -17,7 +17,7 @@
     </div>
     
     <div class="card p-4">
-        <form method="post" action="{{ url_for('add_contact') }}">
+        <form method="post" action="{{ url_for('add_contact') }}" enctype="multipart/form-data">
             <div class="mb-3">
                 <label class="form-label font-weight-bold">姓名 *</label>
                 <input type="text" name="name" class="form-control" required placeholder="請輸入新人姓名或暱稱">
@@ -35,7 +35,35 @@
                     <option value="其他">其他</option>
                 </select>
             </div>
+
+            <div class="mb-3">
+                <label class="form-label font-weight-bold">來源 App</label>
+                <input type="text" name="from_app" list="app-options" class="form-control" placeholder="例如：LINE, Instagram, WeChat 等">
+                <datalist id="app-options">
+                    <option value="LINE"></option>
+                    <option value="Instagram"></option>
+                    <option value="WeChat"></option>
+                    <option value="Facebook Messenger"></option>
+                    <option value="WhatsApp"></option>
+                    <option value="Threads"></option>
+                </datalist>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label font-weight-bold">上傳頭像/圖片</label>
+                <input type="file" name="image" class="form-control" accept="image/*">
+            </div>
             
+            <div class="mb-3">
+                <label class="form-label font-weight-bold">名單分類 (A / B / C 類)</label>
+                <select name="category" class="form-control">
+                    <option value="">無分類</option>
+                    <option value="A">A 類 (知道安麗，態度好肯學習肯改變，晚上有時間出來學習7：30-9：30)</option>
+                    <option value="B">B 類 (還不知安麗，時間有但需要溝通，才願意出來 想改變學習)</option>
+                    <option value="C">C 類 (不論知不知道安麗，時間非常不固定，態度差，不想改，負面偏多等)</option>
+                </select>
+            </div>
+
             <div class="mb-4">
                 <label class="form-label font-weight-bold">標籤 (以英文逗號分隔，例如：新人, 高潛力)</label>
                 <input type="text" name="tags" class="form-control" placeholder="新人, 高潛力">

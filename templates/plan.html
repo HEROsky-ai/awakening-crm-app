@@ -1,60 +1,208 @@
 {% extends "base.html" %}
-{% block content %}
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-    <div>
-        <h1>📅 互動規劃</h1>
-        <p>月底前需要關心的聯絡人</p>
-    </div>
-    <a href="{{ url_for('auto_schedule') }}" class="btn btn-primary">
-        <i class="fas fa-magic"></i> 自動建立事件
-    </a>
-</div>
 
-<div class="card">
-    {% if plan %}
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>優先級</th>
-                    <th>姓名</th>
-                    <th>未互動天數</th>
-                    <th>上次互動</th>
-                    <th>原因</th>
-                    <th>建議日期</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in plan %}
-                <tr class="priority-{{ item.priority }}">
-                    <td>
-                        {% if item.priority == 'high' %}
-                        <span class="badge badge-high">🔴 高</span>
-                        {% elif item.priority == 'medium' %}
-                        <span class="badge badge-medium">🟡 中</span>
-                        {% else %}
-                        <span class="badge badge-low">🟢 低</span>
-                        {% endif %}
-                    </td>
-                    <td><strong>{{ item.contact.name }}</strong></td>
-                    <td>{{ item.days_since if item.days_since < 999 else '從未' }}</td>
-                    <td>{{ item.contact.last_interaction or '從未' }}</td>
-                    <td style="font-size:13px;color:#666;">{{ item.reason }}</td>
-                    <td>{{ item.suggested_date }}</td>
-                    <td>
-                        <a href="{{ url_for('view_contact', contact_id=item.contact.id) }}" class="btn btn-sm btn-outline">關心</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+{% macro render_card(c) %}
+<div class="contact-card">
+    <div class="card-title">
+        <a href="{{ url_for('view_contact', contact_id=c.id) }}">{{ c.name }}</a>
+        <a href="{{ url_for('view_contact', contact_id=c.id) }}" class="btn btn-sm btn-outline" style="padding: 2px 8px; font-size: 11px;">關心</a>
     </div>
-    {% else %}
-    <div class="empty-state">
-        <i class="fas fa-check-circle" style="color:#10b981;"></i>
-        <p>✅ 所有聯絡人近期都有互動！</p>
+    <div class="card-info">
+        <div>來源：{{ c.source or '未記錄' }}</div>
+        <div>最後聯繫：{{ c.last_interaction or '從未' }}</div>
+    </div>
+    {% if c.tags %}
+    <div class="card-tags">
+        {% set tags_list = c.tags|fromjson %}
+        {% for t in tags_list %}
+            <span class="mini-badge">{{ t }}</span>
+        {% endfor %}
     </div>
     {% endif %}
 </div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom: 25px;">
+    <h1>🗂️ 名單分類</h1>
+    <p>管理並關心您的不同特性名單</p>
+</div>
+
+<style>
+    .classification-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 20px;
+        align-items: start;
+    }
+    .class-column {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e2e8f0;
+    }
+    .class-header {
+        margin-bottom: 15px;
+        border-bottom: 2px solid;
+        padding-bottom: 10px;
+    }
+    .class-header h2 {
+        font-size: 1.25rem;
+        margin: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .class-desc {
+        font-size: 0.8rem;
+        color: #64748b;
+        margin-top: 6px;
+        margin-bottom: 0;
+        line-height: 1.4;
+    }
+    
+    /* Category Colors */
+    .class-a { border-color: #3b82f6; }
+    .class-a h2 { color: #1d4ed8; }
+    .class-b { border-color: #f59e0b; }
+    .class-b h2 { color: #b45309; }
+    .class-c { border-color: #94a3b8; }
+    .class-c h2 { color: #475569; }
+    
+    .contact-cards-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-height: 600px;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+    .contact-card {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 12px;
+        transition: transform 0.2s, box-shadow 0.2s;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .contact-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border-color: #cbd5e1;
+    }
+    .card-title {
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .card-title a {
+        color: #1e293b;
+        text-decoration: none;
+    }
+    .card-title a:hover {
+        color: var(--primary);
+    }
+    .card-info {
+        font-size: 0.8rem;
+        color: #64748b;
+        margin-bottom: 8px;
+    }
+    .card-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-bottom: 8px;
+    }
+    .mini-badge {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        background: #f1f5f9;
+        color: #475569;
+        border-radius: 4px;
+        font-weight: 500;
+    }
+    .empty-msg {
+        text-align: center;
+        padding: 30px 10px;
+        color: #94a3b8;
+        font-size: 0.9rem;
+    }
+    .badge-count {
+        background: #e2e8f0;
+        color: #475569;
+        font-size: 0.8rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-weight: bold;
+    }
+    .class-a .badge-count { background: #dbeafe; color: #1e40af; }
+    .class-b .badge-count { background: #fef3c7; color: #92400e; }
+    .class-c .badge-count { background: #f1f5f9; color: #334155; }
+</style>
+
+<div class="classification-grid">
+    <!-- A 類名單 -->
+    <div class="class-column class-a">
+        <div class="class-header">
+            <h2>
+                <span>🔵 A 類名單</span>
+                <span class="badge-count">{{ list_a|length }} 人</span>
+            </h2>
+            <p class="class-desc"><strong>定義：</strong>知道安麗，態度好肯學習肯改變，晚上有時間出來學習7：30-9：30</p>
+        </div>
+        <div class="contact-cards-list">
+            {% if list_a %}
+                {% for c in list_a %}
+                    {{ render_card(c) }}
+                {% endfor %}
+            {% else %}
+                <div class="empty-msg">暫無 A 類聯絡人</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- B 類名單 -->
+    <div class="class-column class-b">
+        <div class="class-header">
+            <h2>
+                <span>🟡 B 類名單</span>
+                <span class="badge-count">{{ list_b|length }} 人</span>
+            </h2>
+            <p class="class-desc"><strong>定義：</strong>還不知安麗，時間有但需要溝通，才願意出來，想改變學習</p>
+        </div>
+        <div class="contact-cards-list">
+            {% if list_b %}
+                {% for c in list_b %}
+                    {{ render_card(c) }}
+                {% endfor %}
+            {% else %}
+                <div class="empty-msg">暫無 B 類聯絡人</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- C 類名單 -->
+    <div class="class-column class-c">
+        <div class="class-header">
+            <h2>
+                <span>⚪ C 類名單</span>
+                <span class="badge-count">{{ list_c|length }} 人</span>
+            </h2>
+            <p class="class-desc"><strong>定義：</strong>不論知不知道安麗，時間非常不固定，態度差，不想改，負面偏多等</p>
+        </div>
+        <div class="contact-cards-list">
+            {% if list_c %}
+                {% for c in list_c %}
+                    {{ render_card(c) }}
+                {% endfor %}
+            {% else %}
+                <div class="empty-msg">暫無 C 類聯絡人</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
 {% endblock %}

@@ -2,7 +2,14 @@
 {% block content %}
 <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
     <div>
-        <h1>👤 {{ contact.name }}</h1>
+        <h1 style="display:flex;align-items:center;gap:12px;">
+            {% if contact.image_path %}
+            <img src="{{ url_for('send_upload', filename=contact.image_path) }}" alt="{{ contact.name }}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">
+            {% else %}
+            <span>👤</span>
+            {% endif %}
+            {{ contact.name }}
+        </h1>
         <p>
             {% for tag in tags %}
             <span class="tag tag-blue">{{ tag }}</span>
@@ -19,8 +26,11 @@
     </div>
 </div>
 
-<div class="card" style="display:flex;gap:20px;flex-wrap:wrap;">
+<div class="card" style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;">
     <div><strong>來源：</strong>{{ contact.source or '-' }}</div>
+    {% if contact.from_app %}
+    <div><strong>來源 App：</strong><span class="badge-tag" style="background-color: #e0e7ff; color: #4f46e5; border: 1px solid #c7d2fe; font-weight: 600;">{{ contact.from_app }}</span></div>
+    {% endif %}
     <div><strong>最後互動：</strong>{{ contact.last_interaction or '從未' }}</div>
     <div><strong>互動次數：</strong>{{ contact.interaction_count }} 次</div>
 </div>

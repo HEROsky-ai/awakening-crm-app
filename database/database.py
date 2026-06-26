@@ -48,10 +48,63 @@ class Database:
                     print(f"Failed to migrate database to custom path: {e}")
                     
         self.db_path = chosen_path
+        self._auto_backup_and_cleanup()
         self._init_db()
+
+    def _auto_backup_and_cleanup(self):
+        """自動備份資料庫並清理 7 天前的舊備份"""
+        import os
+        import shutil
+        from datetime import datetime, timedelta
+
+        # 確定資料庫檔案存在且大小大於 0 才進行備份
+        if not os.path.exists(self.db_path) or os.path.getsize(self.db_path) == 0:
+            return
+
+        try:
+            db_dir = os.path.dirname(os.path.abspath(self.db_path))
+            backup_dir = os.path.join(db_dir, "backups")
+            os.makedirs(backup_dir, exist_ok=True)
+
+            now = datetime.now()
+            
+            # 1. 檢查是否需要備份 (限制每小時最多備份一次，以防爆量)
+            backup_files = [f for f in os.listdir(backup_dir) if f.startswith("awakening_") and f.endswith(".db")]
+            need_backup = True
+            
+            if backup_files:
+                # 找出最新的一個備份檔
+                latest_backup = max(backup_files, key=lambda f: os.path.getmtime(os.path.join(backup_dir, f)))
+                latest_time = datetime.fromtimestamp(os.path.getmtime(os.path.join(backup_dir, latest_backup)))
+                # 如果最新的備份在 1 小時內，就不重複備份
+                if now - latest_time < timedelta(hours=1):
+                    need_backup = False
+
+            if need_backup:
+                timestamp = now.strftime("%Y%m%d_%H%M%S")
+                backup_file_path = os.path.join(backup_dir, f"awakening_{timestamp}.db")
+                shutil.copyfile(self.db_path, backup_file_path)
+                print(f"[Backup] Auto backup created: {backup_file_path}")
+
+            # 2. 自動清理 7 天前 (168小時) 的備份
+            seven_days_ago = now - timedelta(days=7)
+            for f in os.listdir(backup_dir):
+                if f.startswith("awakening_") and f.endswith(".db"):
+                    file_path = os.path.join(backup_dir, f)
+                    file_time = datetime.fromtimestamp(os.path.getmtime(file_path))
+                    if file_time < seven_days_ago:
+                        os.remove(file_path)
+                        print(f"[Backup] Auto cleaned old backup: {f}")
+        except Exception as e:
+            print(f"[Backup] Auto backup or cleanup failed: {e}")
+
 
     def _get_connection(self):
         conn = sqlite3.connect(self.db_path)
+        try:
+            conn.execute("PRAGMA foreign_keys = ON;")
+        except Exception:
+            pass
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -72,7 +125,9 @@ class Database:
                 last_interaction TEXT,
                 interaction_count INTEGER DEFAULT 0,
                 notes TEXT DEFAULT '',
-                user_id TEXT DEFAULT ''
+                user_id TEXT DEFAULT '',
+                image_path TEXT DEFAULT '',
+                from_app TEXT DEFAULT ''
             )
         """)
 
@@ -160,6 +215,10 @@ class Database:
             contacts_cols = [row[1] for row in cursor.fetchall()]
             if "user_id" not in contacts_cols:
                 cursor.execute("ALTER TABLE contacts ADD COLUMN user_id TEXT DEFAULT ''")
+            if "image_path" not in contacts_cols:
+                cursor.execute("ALTER TABLE contacts ADD COLUMN image_path TEXT DEFAULT ''")
+            if "from_app" not in contacts_cols:
+                cursor.execute("ALTER TABLE contacts ADD COLUMN from_app TEXT DEFAULT ''")
             
             # 檢查 formdh_profiles 表
             cursor.execute("PRAGMA table_info(formdh_profiles)")
@@ -185,6 +244,14 @@ class Database:
         except Exception as migrate_err:
             print(f"資料庫欄位自動遷移失敗: {migrate_err}")
 
+        # 清理已孤立的資料 (以防之前沒有 Cascade Delete)
+        try:
+            cursor.execute("DELETE FROM calendar_events WHERE contact_id NOT IN (SELECT id FROM contacts)")
+            cursor.execute("DELETE FROM interactions WHERE contact_id NOT IN (SELECT id FROM contacts)")
+            cursor.execute("DELETE FROM formdh_profiles WHERE contact_id NOT IN (SELECT id FROM contacts)")
+        except Exception as cleanup_err:
+            print(f"資料庫孤立資料清理失敗: {cleanup_err}")
+
         conn.commit()
         conn.close()
 
@@ -198,10 +265,12 @@ class Database:
             d = contact.to_dict()
             cursor.execute("""
                 INSERT INTO contacts (id, name, source, tags, created_at, updated_at, 
-                                     last_interaction, interaction_count, notes, user_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     last_interaction, interaction_count, notes, user_id,
+                                     image_path, from_app)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (d["id"], d["name"], d["source"], d["tags"], d["created_at"],
-                  d["updated_at"], d["last_interaction"], d["interaction_count"], d["notes"], user_id))
+                  d["updated_at"], d["last_interaction"], d["interaction_count"], d["notes"], user_id,
+                  d.get("image_path", ""), d.get("from_app", "")))
             conn.commit()
             
             # 同時建立空的 FORMDH 檔案
@@ -441,11 +510,13 @@ class Database:
             conn.close()
 
     def get_calendar_events(self, contact_id: str = None, start_date: str = None, 
-                          end_date: str = None, user_id: str = None) -> List[dict]:
+                           end_date: str = None, user_id: str = None, include_cancelled: bool = False) -> List[dict]:
         """取得行事曆事件（按用戶篩選）"""
         conn = self._get_connection()
         cursor = conn.cursor()
         query = "SELECT * FROM calendar_events WHERE 1=1"
+        if not include_cancelled:
+            query += " AND status != 'cancelled'"
         params = []
         if contact_id:
             query += " AND contact_id = ?"

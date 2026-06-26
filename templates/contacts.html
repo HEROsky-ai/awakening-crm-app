@@ -30,8 +30,22 @@
             <tbody>
                 {% for c in contacts %}
                 <tr>
-                    <td><strong>{{ c.name }}</strong></td>
-                    <td>{{ c.source or '-' }}</td>
+                    <td>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            {% if c.image_path %}
+                            <img src="{{ url_for('send_upload', filename=c.image_path) }}" alt="{{ c.name }}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #d1d5db;">
+                            {% else %}
+                            <span style="font-size: 20px; line-height: 1;">👤</span>
+                            {% endif %}
+                            <strong>{{ c.name }}</strong>
+                        </div>
+                    </td>
+                    <td>
+                        {{ c.source or '-' }}
+                        {% if c.from_app %}
+                        <span class="badge-tag" style="background-color: #f3f4f6; color: #4b5563; font-size: 11px; padding: 2px 6px; border: 1px solid #e5e7eb; font-weight: normal; margin-left: 4px;">{{ c.from_app }}</span>
+                        {% endif %}
+                    </td>
                     <td>
                         {% for tag in (c.tags|fromjson if c.tags else []) %}
                         <span class="tag tag-{% if tag in ['新人','高潛力'] %}green{% elif tag == '待追蹤' %}orange{% elif tag == '已成交' %}blue{% elif tag == '放棄' %}red{% else %}purple{% endif %}">

@@ -16,6 +16,10 @@ config.yaml
 google_credentials.json
 google_token.json
 
+# Logs
+*.log
+std_out.log
+
 # OS files
 .DS_Store
 Thumbs.db

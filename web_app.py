@@ -98,6 +98,7 @@ def sync_notebooklm():
         for c in contacts:
             lines.append(f"## {c['name']}")
             if c.get('source'): lines.append(f"- 來源：{c['source']}")
+            if c.get('from_app'): lines.append(f"- 來源 App：{c['from_app']}")
             if c.get('tags'):
                 tags = json.loads(c.get('tags', '[]'))
                 if tags: lines.append(f"- 標籤：{', '.join(tags)}")
@@ -140,6 +141,8 @@ def sync_notebooklm():
                 "id": c['id'],
                 "name": c['name'],
                 "source": c.get('source', ''),
+                "from_app": c.get('from_app', ''),
+                "image_path": c.get('image_path', ''),
                 "tags": tags_list,
                 "notes": c.get('notes', ''),
                 "last_interaction": c.get('last_interaction', '從未'),
@@ -551,7 +554,29 @@ def get_static_html_template(contacts_data, sync_time):
 
 # ========== Flask ==========
 app = Flask(__name__)
-app.secret_key = os.urandom(24).hex()
+
+# secret_key 固定化：每次重啟使用相同的 key，避免 session 失效
+def _load_or_create_secret_key():
+    """從 storage_config.json 讀取 secret_key，若沒有則自動生成並寫入，確保重啟後 session 不失效"""
+    try:
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            if cfg.get("secret_key"):
+                return cfg["secret_key"]
+            # 自動生成並寫入
+            import secrets
+            new_key = secrets.token_hex(32)
+            cfg["secret_key"] = new_key
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, ensure_ascii=False)
+            return new_key
+    except Exception as e:
+        print(f"⚠️ [secret_key] 讀取/寫入失敗，使用臨時 key: {e}")
+    import secrets
+    return secrets.token_hex(32)
+
+app.secret_key = _load_or_create_secret_key()
 
 @app.template_filter('fromjson')
 def fromjson_filter(s):
@@ -637,7 +662,12 @@ def inject_today_progress():
     try:
         today_date = datetime.now().strftime("%Y-%m-%d")
         events = db.get_calendar_events()
-        today_events = [e for e in events if e.get("event_date") == today_date]
+        today_events = []
+        for e in events:
+            if e.get("event_date") == today_date:
+                contact = db.get_contact(e.get("contact_id"))
+                if contact:
+                    today_events.append(e)
         total = len(today_events)
         completed = sum(1 for e in today_events if e.get("status") == "completed")
         pending = sum(1 for e in today_events if e.get("status") == "pending")
@@ -655,6 +685,15 @@ def inject_today_progress():
 
 # ========== 路由 ==========
 
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
+
+@app.route('/uploads/<path:filename>')
+def send_upload(filename):
+    from flask import send_from_directory
+    return send_from_directory(BASE_DIR / 'uploads', filename)
+
 @app.route('/')
 def index():
     if not is_storage_configured():
@@ -667,6 +706,10 @@ def index():
 def dashboard():
     if not is_storage_configured():
         return redirect(url_for('settings'))
+
+    from modules.planner import Planner
+    planner = Planner(db)
+    planner.auto_schedule_interactions()
 
     contacts = db.get_all_contacts()
     now = datetime.now()
@@ -726,11 +769,33 @@ def add_contact():
     if request.method == 'POST':
         name = request.form.get('name')
         source = request.form.get('source', '')
+        from_app = request.form.get('from_app', '')
+        category = request.form.get('category', '')
         tags_str = request.form.get('tags', '')
         tags = [t.strip() for t in tags_str.split(',') if t.strip()]
 
+        # 清除可能重複或衝突的舊 A/B/C 標籤
+        tags = [t for t in tags if t.strip().upper() not in ['A', 'B', 'C', 'A類', 'B類', 'C類']]
+
+        # 若選擇分類，將分類加入標籤最前方
+        if category in ['A', 'B', 'C']:
+            tags.insert(0, category)
+
+        # 處理圖片上傳
+        image_path = ''
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and file.filename != '':
+                import uuid
+                ext = os.path.splitext(file.filename)[1]
+                filename = f"avatar_{uuid.uuid4().hex[:10]}{ext}"
+                filepath = BASE_DIR / "uploads" / filename
+                os.makedirs(filepath.parent, exist_ok=True)
+                file.save(filepath)
+                image_path = filename
+
         from database.models import Contact
-        contact = Contact(name=name, source=source, tags=tags)
+        contact = Contact(name=name, source=source, tags=tags, image_path=image_path, from_app=from_app)
 
         if db.add_contact(contact):
             flash(f'✅ 已新增：{name}', 'success')
@@ -750,17 +815,58 @@ def edit_contact(contact_id):
     if request.method == 'POST':
         name = request.form.get('name')
         source = request.form.get('source', '')
+        from_app = request.form.get('from_app', '')
+        category = request.form.get('category', '')
         tags_str = request.form.get('tags', '')
         notes = request.form.get('notes', '')
         tags = [t.strip() for t in tags_str.split(',') if t.strip()]
 
-        db.update_contact(contact_id, name=name, source=source,
-                         tags=json.dumps(tags, ensure_ascii=False), notes=notes)
+        # 清除可能重複或衝突的舊 A/B/C 標籤
+        tags = [t for t in tags if t.strip().upper() not in ['A', 'B', 'C', 'A類', 'B類', 'C類']]
+
+        # 若選擇分類，將分類加入標籤最前方
+        if category in ['A', 'B', 'C']:
+            tags.insert(0, category)
+
+        update_kwargs = {
+            "name": name,
+            "source": source,
+            "from_app": from_app,
+            "tags": json.dumps(tags, ensure_ascii=False),
+            "notes": notes
+        }
+
+        # 處理圖片上傳
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and file.filename != '':
+                import uuid
+                ext = os.path.splitext(file.filename)[1]
+                filename = f"avatar_{uuid.uuid4().hex[:10]}{ext}"
+                filepath = BASE_DIR / "uploads" / filename
+                os.makedirs(filepath.parent, exist_ok=True)
+                file.save(filepath)
+                update_kwargs["image_path"] = filename
+
+        db.update_contact(contact_id, **update_kwargs)
         flash('✅ 已更新', 'success')
         return redirect(url_for('view_contact', contact_id=contact_id))
 
-    tags_str = ", ".join(json.loads(contact.get("tags", "[]")))
-    return render_template('edit_contact.html', contact=contact, tags_str=tags_str)
+    tags_list = json.loads(contact.get("tags", "[]"))
+    # 判斷目前分類
+    current_category = ""
+    normalized_tags = [t.strip().upper() for t in tags_list]
+    if 'A' in normalized_tags or 'A類' in tags_list:
+        current_category = "A"
+    elif 'B' in normalized_tags or 'B類' in tags_list:
+        current_category = "B"
+    elif 'C' in normalized_tags or 'C類' in tags_list:
+        current_category = "C"
+
+    # 從輸入框的標籤中排除分類標籤
+    filtered_tags = [t for t in tags_list if t.strip().upper() not in ['A', 'B', 'C', 'A類', 'B類', 'C類']]
+    tags_str = ", ".join(filtered_tags)
+    return render_template('edit_contact.html', contact=contact, tags_str=tags_str, current_category=current_category)
 
 @app.route('/contacts/<contact_id>/delete')
 def delete_contact(contact_id):
@@ -854,13 +960,33 @@ def add_interaction(contact_id):
 def plan_view():
     from modules.planner import Planner
     planner = Planner(db)
-    plan = planner.generate_monthly_plan()
-    return render_template('plan.html', plan=plan)
+    planner.auto_schedule_interactions()
+    
+    import json
+    contacts = db.get_all_contacts()
+    list_a = []
+    list_b = []
+    list_c = []
+    for c in contacts:
+        try:
+            tags = json.loads(c.get("tags", "[]"))
+            normalized_tags = [t.strip().upper() for t in tags]
+            if 'A' in normalized_tags or 'A類' in tags:
+                list_a.append(c)
+            elif 'B' in normalized_tags or 'B類' in tags:
+                list_b.append(c)
+            elif 'C' in normalized_tags or 'C類' in tags:
+                list_c.append(c)
+        except Exception as e:
+            print(f"Error parsing tags for contact {c.get('name')}: {e}")
+            
+    return render_template('plan.html', list_a=list_a, list_b=list_b, list_c=list_c)
 
 @app.route('/today')
 def today_view():
     from modules.planner import Planner
     planner = Planner(db)
+    planner.auto_schedule_interactions()
     tasks = planner.get_today_tasks()
     overdue = planner.get_overdue_contacts()
     
@@ -871,10 +997,12 @@ def today_view():
     for e in events:
         if e.get("event_date") == today_date:
             contact = db.get_contact(e["contact_id"])
+            if not contact:
+                continue
             today_events.append({
                 "id": e["id"],
                 "contact_id": e["contact_id"],
-                "contact_name": contact["name"] if contact else "未知",
+                "contact_name": contact["name"],
                 "title": e["title"],
                 "description": e["description"],
                 "event_time": e["event_time"],
@@ -897,7 +1025,6 @@ def today_view():
 
 @app.route('/plan/auto_schedule')
 def auto_schedule():
-    from datetime import datetime
     from modules.planner import Planner
     planner = Planner(db)
     
@@ -906,35 +1033,11 @@ def auto_schedule():
         flash('ℹ️ 目前無聯絡人資料，請先新增聯絡人或透過「AI 文字建檔」建立檔案。', 'info')
         return redirect(url_for('plan_view'))
         
-    plan = planner.generate_monthly_plan()
-    if not plan:
-        flash('ℹ️ 所有聯絡人近期均已有互動記錄，無須安排新的關心計畫。', 'info')
-        return redirect(url_for('plan_view'))
-        
-    high_med_items = [item for item in plan if item["priority"] in ["high", "medium"]]
-    if not high_med_items:
-        flash('ℹ️ 所有聯絡人近期互動良好，暫無高或中優先權的關心任務需要排程。', 'info')
-        return redirect(url_for('plan_view'))
-        
-    has_unscheduled = False
-    for item in high_med_items:
-        existing = db.get_calendar_events(
-            contact_id=item["contact"]["id"],
-            start_date=datetime.now().strftime("%Y-%m-%d")
-        )
-        if not existing:
-            has_unscheduled = True
-            break
-            
-    if not has_unscheduled:
-        flash('ℹ️ 關心計畫已排定在行事曆中，無須重複建立。', 'info')
-        return redirect(url_for('plan_view'))
-        
     count = planner.auto_schedule_interactions()
     if count > 0:
-        flash(f'✅ 已自動建立 {count} 個關心事件', 'success')
+        flash(f'✅ 已自動隨機平均分配聯絡人，並建立 {count} 個關心事件！', 'success')
     else:
-        flash('ℹ️ 目前沒有需要建立關心事件的聯絡人。', 'info')
+        flash('ℹ️ 未能建立任何新的關心事件。', 'info')
         
     return redirect(url_for('plan_view'))
 
@@ -945,16 +1048,22 @@ def calendar_view():
     if not is_storage_configured():
         return redirect(url_for('settings'))
 
+    from modules.planner import Planner
+    planner = Planner(db)
+    planner.auto_schedule_interactions()
+
     events = db.get_calendar_events()
     contacts = db.get_all_contacts()
     
     events_list = []
     for e in events:
         contact = db.get_contact(e["contact_id"])
+        if not contact:
+            continue
         events_list.append({
             "id": e["id"],
             "contact_id": e["contact_id"],
-            "contact_name": contact["name"] if contact else "未知",
+            "contact_name": contact["name"],
             "title": e["title"],
             "description": e["description"],
             "event_date": e["event_date"],
@@ -972,14 +1081,20 @@ def calendar_view():
     month_new = sum(1 for c in contacts if c.get("created_at", "") >= month_start)
     
     today_date = now.strftime("%Y-%m-%d")
-    # 今日待聯絡人數
-    today_chats_count = sum(1 for e in events if e.get("event_date") == today_date and e.get("status") == "pending")
+    
+    # 統計今日進度與待辦 (排除已刪除聯絡人)
+    today_events_valid = []
+    today_chats_count = 0
+    for e in events:
+        if e.get("event_date") == today_date:
+            if db.get_contact(e.get("contact_id")):
+                today_events_valid.append(e)
+                if e.get("status") == "pending":
+                    today_chats_count += 1
 
-    # 統計今日進度
-    today_events = [e for e in events if e.get("event_date") == today_date]
-    today_total_count = len(today_events)
-    today_completed_count = sum(1 for e in today_events if e.get("status") == "completed")
-    today_pending_count = sum(1 for e in today_events if e.get("status") == "pending")
+    today_total_count = len(today_events_valid)
+    today_completed_count = sum(1 for e in today_events_valid if e.get("status") == "completed")
+    today_pending_count = sum(1 for e in today_events_valid if e.get("status") == "pending")
 
     return render_template(
         'calendar.html', 
@@ -1005,7 +1120,7 @@ def complete_event_with_notes(event_id):
     chat_progress = request.form.get('chat_progress', '').strip()
     
     # 讀取行事曆事件
-    events = db.get_calendar_events()
+    events = db.get_calendar_events(include_cancelled=True)
     event = next((e for e in events if str(e["id"]) == str(event_id)), None)
     if not event:
         flash('❌ 找不到該聊天計畫', 'error')
@@ -1058,7 +1173,13 @@ def complete_event_with_notes(event_id):
 @app.route('/calendar/cancel/<event_id>')
 def cancel_event(event_id):
     db.update_calendar_event(event_id, status="cancelled")
-    flash('🗑️ 已取消', 'success')
+    
+    # 同步更新：取消後立即重新規劃，以遞補空缺
+    from modules.planner import Planner
+    planner = Planner(db)
+    planner.auto_schedule_interactions()
+    
+    flash('🗑️ 已取消，已自動重新規劃遞補日程！', 'success')
     return redirect(url_for('calendar_view'))
 
 # --- 智能更新 ---
@@ -1597,7 +1718,119 @@ def export_data():
     return response
 
 # ========== 啟動 ==========
+def kill_process_on_port(port):
+    import subprocess
+    import time
+    import os
+    try:
+        output = subprocess.check_output(f'netstat -ano | findstr LISTENING | findstr ":{port}"', shell=True).decode('cp950', errors='ignore')
+        current_pid = os.getpid()
+        for line in output.splitlines():
+            parts = line.strip().split()
+            if len(parts) >= 5:
+                pid = int(parts[-1])
+                if pid != current_pid:
+                    print(f"  ⚡ 發現 Port {port} 已被 PID {pid} 佔用，正在關閉舊的執行檔...")
+                    subprocess.call(f"taskkill /F /PID {pid}", shell=True)
+                    time.sleep(1)
+    except Exception:
+        pass
+
+def ensure_firewall_rule(port=5000):
+    """確保 Windows 防火牆允許指定 port 的入站流量，若規則不存在則自動新增"""
+    import subprocess
+    try:
+        rule_name = f"覺醒CRM Port {port}"
+        result = subprocess.run(
+            ['netsh', 'advfirewall', 'firewall', 'show', 'rule', f'name={rule_name}'],
+            capture_output=True, text=True, encoding='utf-8', errors='ignore'
+        )
+        if '找不到符合指定條件的規則' in result.stdout or result.returncode != 0:
+            print(f"  🔧 防火牆規則不存在，嘗試自動新增 Port {port} 規則...")
+            # 嘗試以系統管理員權限新增
+            add_result = subprocess.run(
+                ['powershell', '-Command',
+                 f'Start-Process netsh -ArgumentList \'advfirewall firewall add rule name="{rule_name}" dir=in action=allow protocol=TCP localport={port}\' -Verb RunAs -Wait'],
+                capture_output=True, text=True, timeout=30
+            )
+            if add_result.returncode == 0:
+                print(f"  ✅ 防火牆規則已新增：允許 Port {port} 入站")
+            else:
+                print(f"  ⚠️  防火牆規則新增失敗（可能需要手動以管理員身份執行）")
+        else:
+            print(f"  ✅ 防火牆規則已存在：Port {port} 入站允許")
+    except Exception as e:
+        print(f"  ⚠️  防火牆檢查異常: {e}")
+
+def test_remote_access(port=5000):
+    """測試遠端連線是否可正常使用，並顯示本機 IP 清單"""
+    import socket
+    import subprocess
+    import time
+
+    print()
+    print("  🔍 正在測試遠端連線...")
+
+    # 取得所有本機 IP
+    local_ips = []
+    try:
+        result = subprocess.run(['ipconfig'], capture_output=True, text=True, encoding='cp950', errors='ignore')
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if 'IPv4' in line and ('位址' in line or 'Address' in line):
+                parts = line.split(':')
+                if len(parts) >= 2:
+                    ip = parts[-1].strip()
+                    if ip and not ip.startswith('127.'):
+                        local_ips.append(ip)
+    except Exception:
+        pass
+
+    # 等待 Flask 啟動再測試（在子執行緒中做）
+    def _do_test():
+        time.sleep(3)  # 等待 Flask 完全啟動
+        print()
+        print("  ========== 遠端連線測試結果 ==========")
+
+        # 本機測試
+        try:
+            s = socket.socket()
+            s.settimeout(3)
+            result = s.connect_ex(('127.0.0.1', port))
+            s.close()
+            if result == 0:
+                print(f"  ✅ 本機連線正常：http://127.0.0.1:{port}")
+            else:
+                print(f"  ❌ 本機連線失敗 (code {result})")
+        except Exception as e:
+            print(f"  ❌ 本機連線測試異常：{e}")
+
+        # 區域網路 IP 測試
+        if local_ips:
+            for ip in local_ips:
+                try:
+                    s = socket.socket()
+                    s.settimeout(3)
+                    result = s.connect_ex((ip, port))
+                    s.close()
+                    if result == 0:
+                        print(f"  ✅ 區域網路連線正常：http://{ip}:{port}")
+                    else:
+                        print(f"  ⚠️  區域網路 {ip}:{port} 無法連線 (可能是防火牆問題)")
+                except Exception as e:
+                    print(f"  ⚠️  {ip} 測試異常：{e}")
+        else:
+            print("  ⚠️  無法取得本機 IP，請手動確認")
+
+        print("  ==========================================")
+        print()
+
+    t = threading.Thread(target=_do_test, daemon=True)
+    t.start()
+
 if __name__ == '__main__':
+    ensure_firewall_rule(5000)
+    kill_process_on_port(5000)
     storage = get_storage_info()
     print("=" * 50)
     print("  覺醒行動app（公開版）")
@@ -1616,6 +1849,7 @@ if __name__ == '__main__':
     print("  設定 → 儲存位置 → 改成 OneDrive/iCloud/Google Drive 資料夾")
     print("=" * 50)
 
+    test_remote_access(5000)
     import webbrowser
     webbrowser.open('http://127.0.0.1:5000')
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)

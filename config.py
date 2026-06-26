@@ -27,6 +27,9 @@ GOOGLE_TOKEN_PATH = BASE_DIR / "data" / "google_token.json"
 
 # 預設標籤
 DEFAULT_TAGS = [
+    "A",
+    "B",
+    "C",
     "新人",
     "舊人", 
     "高潛力",

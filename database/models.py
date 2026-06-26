@@ -22,6 +22,8 @@ class Contact:
     last_interaction: Optional[str] = None
     interaction_count: int = 0
     notes: str = ""
+    image_path: str = ""
+    from_app: str = ""
 
     def to_dict(self):
         d = asdict(self)
@@ -42,7 +44,9 @@ class Contact:
             updated_at=d.get("updated_at", ""),
             last_interaction=d.get("last_interaction"),
             interaction_count=d.get("interaction_count", 0),
-            notes=d.get("notes", "")
+            notes=d.get("notes", ""),
+            image_path=d.get("image_path", ""),
+            from_app=d.get("from_app", "")
         )
 
     def days_since_interaction(self) -> int:

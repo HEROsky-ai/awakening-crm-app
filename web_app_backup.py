@@ -151,6 +151,10 @@ def now_str():
 
 # ========== 路由 ==========
 
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
+
 @app.route('/')
 def index():
     if not is_storage_configured():

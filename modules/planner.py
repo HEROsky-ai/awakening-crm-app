@@ -248,31 +248,213 @@ class Planner:
     
     def auto_schedule_interactions(self) -> int:
         """自動在行事曆建立互動事件"""
+        import random
+        import math
+        import calendar
         from database.models import CalendarEvent
         
-        plan = self.generate_monthly_plan()
-        count = 0
+        contacts = self.db.get_all_contacts(self.user_id)
+        if not contacts:
+            return 0
+            
+        # 1. 取得今日起所有 pending 且類型為 followup 的現有行事曆事件，以保留不更動並取得已排程的聯絡人
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        existing_events = self.db.get_calendar_events(start_date=today_str, user_id=self.user_id)
         
-        for item in plan:
-            if item["priority"] in ["high", "medium"]:
-                # 檢查是否已有即將到來的事件
-                existing = self.db.get_calendar_events(
-                    contact_id=item["contact"]["id"],
-                    start_date=datetime.now().strftime("%Y-%m-%d")
-                )
+        contacts_with_scheduled_event = set()
+        for event in existing_events:
+            if event.get("event_type") == "followup" and event.get("status") == "pending":
+                contacts_with_scheduled_event.add(event.get("contact_id"))
                 
-                if not existing:
-                    event = CalendarEvent(
-                        contact_id=item["contact"]["id"],
-                        title=f"關心：{item['contact']['name']}",
-                        description=f"原因：{item['reason']}\n建議：{item['suggestion']}",
-                        event_date=item["suggested_date"],
-                        event_time="14:00",
-                        event_type="followup",
-                        status="pending"
-                    )
-                    
-                    if self.db.add_calendar_event(event):
-                        count += 1
+        # 2. 過濾掉已經有排定關心事件的聯絡人，只規劃剩餘的人
+        contacts_to_schedule = [c for c in contacts if c["id"] not in contacts_with_scheduled_event]
+        if not contacts_to_schedule:
+            return 0
+            
+        current_date = datetime.now()
         
-        return count
+        # 3. 分類聯絡人：新建聯絡人（7天內建立或未互動且無創建日期）與一般聯絡人
+        newly_created_contacts = []
+        regular_contacts = []
+        
+        for c in contacts_to_schedule:
+            is_newly_created = False
+            created_at_str = c.get("created_at", "")
+            if created_at_str:
+                try:
+                    created_date_str = created_at_str.split(" ")[0]
+                    created_dt = datetime.strptime(created_date_str, "%Y-%m-%d")
+                    if (current_date - created_dt).days <= 7:
+                        is_newly_created = True
+                except Exception:
+                    pass
+            else:
+                if c.get("last_interaction") is None:
+                    is_newly_created = True
+                    
+            if is_newly_created:
+                newly_created_contacts.append(c)
+            else:
+                regular_contacts.append(c)
+                
+        # 4. 初始化每日已排定的自動關心事件計數器，用於額度限制
+        auto_counts = {}
+        for event in existing_events:
+            if event.get("event_type") == "followup" and event.get("status") == "pending":
+                desc = event.get("description", "")
+                is_manual = not desc.startswith("原因：")
+                if not is_manual:
+                    date = event.get("event_date")
+                    auto_counts[date] = auto_counts.get(date, 0) + 1
+                    
+        total_scheduled = 0
+        
+        # 5. 排程新建聯絡人
+        # 先將「新人」排在前面優先處理
+        def is_xinren_contact(c):
+            try:
+                tags = json.loads(c.get("tags", "[]"))
+                return "新人" in tags
+            except Exception:
+                return False
+
+        newly_created_contacts.sort(key=lambda c: 0 if is_xinren_contact(c) else 1)
+
+        dates_3_to_5 = [(current_date + timedelta(days=d)).strftime("%Y-%m-%d") for d in [3, 4, 5]]
+        dates_1_to_2 = [(current_date + timedelta(days=d)).strftime("%Y-%m-%d") for d in [1, 2]]
+        dates_6_to_7 = [(current_date + timedelta(days=d)).strftime("%Y-%m-%d") for d in [6, 7]]
+        dates_1_to_7 = dates_1_to_2 + dates_3_to_5 + dates_6_to_7
+        
+        for c in newly_created_contacts:
+            is_xinren = is_xinren_contact(c)
+            scheduled_date = None
+            
+            if is_xinren:
+                # 新人直接優先排入，並依據當日的人力（已排定數量）做平均分配，即選擇 1-7 天中數量最少的一天
+                scheduled_date = min(dates_1_to_7, key=lambda d: auto_counts.get(d, 0))
+            else:
+                # 一般新建聯絡人優先排入 3-5 天中未滿 15 人的天數
+                temp_3_to_5 = list(dates_3_to_5)
+                random.shuffle(temp_3_to_5)
+                for date in temp_3_to_5:
+                    if auto_counts.get(date, 0) < 15:
+                        scheduled_date = date
+                        break
+                
+                # 若 3-5 天已滿，優先從明天開始排 (1-2 天)
+                if not scheduled_date:
+                    temp_1_to_2 = list(dates_1_to_2)
+                    random.shuffle(temp_1_to_2)
+                    for date in temp_1_to_2:
+                        if auto_counts.get(date, 0) < 15:
+                            scheduled_date = date
+                            break
+                            
+                # 若 1-5 天都滿了，最慢一星期內排入 (6-7 天)
+                if not scheduled_date:
+                    temp_6_to_7 = list(dates_6_to_7)
+                    random.shuffle(temp_6_to_7)
+                    for date in temp_6_to_7:
+                        if auto_counts.get(date, 0) < 15:
+                            scheduled_date = date
+                            break
+                            
+                # 若 1-7 天全部都滿了，則選擇人數最少的那天
+                if not scheduled_date:
+                    scheduled_date = min(dates_1_to_7, key=lambda d: auto_counts.get(d, 0))
+                    
+            priority, score, reason = self.calculate_priority(c)
+            suggestion = self._get_suggestion(c, priority)
+            
+            event = CalendarEvent(
+                contact_id=c["id"],
+                title=f"關心：{c['name']}",
+                description=f"原因：{reason}\n建議：{suggestion}",
+                event_date=scheduled_date,
+                event_time="14:00",
+                event_type="followup",
+                status="pending"
+            )
+            
+            if self.db.add_calendar_event(event):
+                total_scheduled += 1
+                auto_counts[scheduled_date] = auto_counts.get(scheduled_date, 0) + 1
+                
+        # 6. 排程一般聯絡人，隨機平均分配到 12 個月中
+        if regular_contacts:
+            random.shuffle(regular_contacts)
+            buckets = [[] for _ in range(12)]
+            for i, c in enumerate(regular_contacts):
+                buckets[i % 12].append(c)
+                
+            carry_over = []
+            
+            def get_dates_in_month(year: int, month: int, start_from_day: int = 1) -> List[str]:
+                _, last_day = calendar.monthrange(year, month)
+                dates = []
+                for day in range(start_from_day, last_day + 1):
+                    dates.append(f"{year:04d}-{month:02d}-{day:02d}")
+                return dates
+                
+            m = 0
+            while m < 12 or carry_over:
+                target_year = current_date.year + (current_date.month - 1 + m) // 12
+                target_month = (current_date.month - 1 + m) % 12 + 1
+                
+                start_day = current_date.day if m == 0 else 1
+                dates = get_dates_in_month(target_year, target_month, start_day)
+                
+                current_month_contacts = list(carry_over)
+                if m < 12:
+                    current_month_contacts.extend(buckets[m])
+                carry_over = []
+                
+                if not current_month_contacts:
+                    if m >= 12:
+                        break
+                    m += 1
+                    continue
+                    
+                if not dates:
+                    carry_over = current_month_contacts
+                    m += 1
+                    continue
+                    
+                random.shuffle(dates)
+                
+                for idx, date in enumerate(dates):
+                    remaining_days = len(dates) - idx
+                    if not current_month_contacts:
+                        break
+                        
+                    existing_auto_count = auto_counts.get(date, 0)
+                    day_limit = max(0, 15 - existing_auto_count)
+                    
+                    num_to_schedule = min(day_limit, math.ceil(len(current_month_contacts) / remaining_days))
+                    for _ in range(num_to_schedule):
+                        if not current_month_contacts:
+                            break
+                        contact = current_month_contacts.pop(0)
+                        priority, score, reason = self.calculate_priority(contact)
+                        suggestion = self._get_suggestion(contact, priority)
+                        
+                        event = CalendarEvent(
+                            contact_id=contact["id"],
+                            title=f"關心：{contact['name']}",
+                            description=f"原因：{reason}\n建議：{suggestion}",
+                            event_date=date,
+                            event_time="14:00",
+                            event_type="followup",
+                            status="pending"
+                        )
+                        
+                        if self.db.add_calendar_event(event):
+                            total_scheduled += 1
+                            auto_counts[date] = auto_counts.get(date, 0) + 1
+                            
+                if current_month_contacts:
+                    carry_over = current_month_contacts
+                    
+                m += 1
+                
+        return total_scheduled

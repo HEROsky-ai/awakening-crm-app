@@ -110,11 +110,11 @@ class AwakeningAppTestCase(unittest.TestCase):
         
         # 驗證事件是否在資料庫中
         events = self.db.get_calendar_events()
-        self.assertEqual(len(events), 1)
-        self.assertEqual(events[0]['contact_id'], c.id)
-        self.assertEqual(events[0]['title'], '測試聊天日程')
-        self.assertEqual(events[0]['event_date'], '2026-06-20')
-        self.assertEqual(events[0]['status'], 'pending')
+        manual_event = next((e for e in events if e['title'] == '測試聊天日程'), None)
+        self.assertIsNotNone(manual_event)
+        self.assertEqual(manual_event['contact_id'], c.id)
+        self.assertEqual(manual_event['event_date'], '2026-06-20')
+        self.assertEqual(manual_event['status'], 'pending')
 
     def test_05_update_formdh(self):
         """測試更新 FORMDH 檔案與完整度計算"""
@@ -183,7 +183,7 @@ class AwakeningAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         
         # 檢查資料庫狀態
-        events = self.db.get_calendar_events()
+        events = self.db.get_calendar_events(include_cancelled=True)
         events_dict = {e['id']: e for e in events}
         self.assertEqual(events_dict[e1.id]['status'], 'completed')
         self.assertEqual(events_dict[e2.id]['status'], 'cancelled')
@@ -317,6 +317,157 @@ class AwakeningAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("測試清單人".encode('utf-8'), response.data)
         self.assertIn("標籤A".encode('utf-8'), response.data)
+
+    def test_13_auto_schedule_random_distribution(self):
+        """測試自動規劃關心事件按鈕，會隨機平均分配聯絡人、每日上限<=15人、溢出自動排到下個月。
+        並且：
+        1. 新建聯絡人會在近期的 3 到 5 天內提醒。
+        2. 新人免除 15 人上限限制，且當天人數過多時可調整到一週內天數進行平均。
+        """
+        from database.models import Contact, CalendarEvent
+        from modules.planner import Planner
+        from datetime import datetime, timedelta
+        import json
+        
+        # 為了獨立且精確地測試，我們先清空資料庫
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM contacts")
+        cursor.execute("DELETE FROM calendar_events")
+        conn.commit()
+        conn.close()
+        
+        planner = Planner(self.db)
+        
+        # 1. 建立新建非新人的聯絡人 (7天內建立且無互動，不含「新人」標籤)
+        # 這些應該落在 today+3 到 today+5 天內
+        new_contacts = []
+        for i in range(5):
+            c = Contact(
+                name=f"新建非新人_{i}",
+                source="系統測試",
+                tags=[],
+                created_at=datetime.now().strftime("%Y-%m-%d %H:%M")
+            )
+            self.db.add_contact(c)
+            new_contacts.append(c)
+            
+        # 2. 建立新建的新人聯絡人 (7天內建立且無互動，含有「新人」標籤)
+        # 這些在普通情況下也會落在 today+3 到 today+5 內，若人過多會在一週內 (1-7天) 進行分攤
+        xinren_contacts = []
+        for i in range(20):
+            c = Contact(
+                name=f"新建新人_{i}",
+                source="系統測試",
+                tags=["新人"],
+                created_at=datetime.now().strftime("%Y-%m-%d %H:%M")
+            )
+            self.db.add_contact(c)
+            xinren_contacts.append(c)
+            
+        # 3. 建立一般聯絡人 (非新建，比如 created_at 是 10 天前)
+        # 這些應該被平均分到 12 個月中
+        for i in range(20):
+            c = Contact(
+                name=f"一般人_{i}",
+                source="系統測試",
+                created_at=(datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d %H:%M"),
+                last_interaction=(datetime.now() - timedelta(days=20)).strftime("%Y-%m-%d")
+            )
+            self.db.add_contact(c)
+            
+        # 4. 執行自動規劃
+        count = planner.auto_schedule_interactions()
+        self.assertEqual(count, 45) # 5 + 20 + 20 = 45 人均建立事件
+        
+        events = self.db.get_calendar_events()
+        
+        # 5. 驗證新建非新人的聯絡人全部都在 3-5 天內
+        today = datetime.now()
+        dates_3_to_5 = [(today + timedelta(days=d)).strftime("%Y-%m-%d") for d in [3, 4, 5]]
+        dates_1_to_7 = [(today + timedelta(days=d)).strftime("%Y-%m-%d") for d in range(1, 8)]
+        
+        for c in new_contacts:
+            c_events = [e for e in events if e["contact_id"] == c.id]
+            self.assertEqual(len(c_events), 1)
+            self.assertIn(c_events[0]["event_date"], dates_3_to_5)
+            
+        # 6. 驗證「新人」分配到一週內 (1-7天內) 以做平均且免除 15 人限制
+        for c in xinren_contacts:
+            c_events = [e for e in events if e["contact_id"] == c.id]
+            self.assertEqual(len(c_events), 1)
+            self.assertIn(c_events[0]["event_date"], dates_1_to_7)
+            
+        # 7. 驗證一般人被分派到後面（非 1-7 天短時間）
+        # 我們測試是否有一般人排在未來的各個月份中
+        # 可以藉由檢查排程日期是否有大於 today + 7 天的來確認
+        future_7_days = (today + timedelta(days=7)).strftime("%Y-%m-%d")
+        has_long_term = False
+        for event in events:
+            if event["event_date"] > future_7_days:
+                has_long_term = True
+                break
+        self.assertTrue(has_long_term, "一般人應該被平均分佈到較長遠的月份中")
+
+    def test_09_add_contact_with_image_and_app_source(self):
+        """測試新增聯絡人同時帶有圖片和來源 App 以及後續編輯功能"""
+        import io
+        data = {
+            'name': '測試新圖片好友',
+            'source': 'IG',
+            'from_app': 'Instagram',
+            'tags': '新人',
+            'image': (io.BytesIO(b"fake image content"), 'test_avatar.png')
+        }
+        response = self.app.post('/contacts/add', data=data, content_type='multipart/form-data', follow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+
+        # 驗證資料庫
+        contacts = self.db.search_contacts('測試新圖片好友')
+        self.assertEqual(len(contacts), 1)
+        contact = contacts[0]
+        self.assertEqual(contact['name'], '測試新圖片好友')
+        self.assertEqual(contact['from_app'], 'Instagram')
+        self.assertTrue(contact['image_path'].startswith('avatar_'))
+
+        # 驗證檔案是否成功儲存到 uploads
+        import config
+        saved_file = config.BASE_DIR / 'uploads' / contact['image_path']
+        self.assertTrue(saved_file.exists())
+
+        # 驗證編輯功能
+        edit_data = {
+            'name': '編輯後圖片好友',
+            'source': 'LINE',
+            'from_app': 'LINE_App',
+            'tags': '舊人',
+            'notes': '修改測試',
+            'image': (io.BytesIO(b"updated fake image content"), 'test_avatar_updated.png')
+        }
+        edit_response = self.app.post(f"/contacts/{contact['id']}/edit", data=edit_data, content_type='multipart/form-data', follow_redirects=True)
+        self.assertEqual(edit_response.status_code, 200)
+
+        # 驗證編輯後的資料庫與檔案
+        updated_contact = self.db.get_contact(contact['id'])
+        self.assertEqual(updated_contact['name'], '編輯後圖片好友')
+        self.assertEqual(updated_contact['from_app'], 'LINE_App')
+        self.assertEqual(updated_contact['source'], 'LINE')
+        self.assertTrue(updated_contact['image_path'].startswith('avatar_'))
+
+        # 驗證靜態 uploads 路由是否可存取該圖片
+        image_response = self.app.get(f"/uploads/{updated_contact['image_path']}")
+        self.assertEqual(image_response.status_code, 200)
+        self.assertEqual(image_response.data, b"updated fake image content")
+
+        # 刪除測試產生的上傳檔案以保持乾淨
+        try:
+            saved_file.unlink()
+        except:
+            pass
+        try:
+            (config.BASE_DIR / 'uploads' / updated_contact['image_path']).unlink()
+        except:
+            pass
 
 # 測試結束後還原正式的設定檔
 def restore_backup():
