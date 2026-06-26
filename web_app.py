@@ -589,65 +589,71 @@ def fromjson_filter(s):
 
 db = Database()
 
-# ========== 每2小時進度通知排程器 ==========
+# ========== 每小時進度通知排程器 ==========
 import threading
 import time
 
-def send_two_hourly_progress_notification():
-    """發送每2小時進度通知"""
+def send_hourly_progress_notification():
+    """發送每小時進度通知（08:00 ~ 23:59，有未完成任務才發送）"""
     try:
-        today_date = datetime.now().strftime("%Y-%m-%d")
+        now = datetime.now()
+        current_hour = now.hour
+
+        # 僅在 08:00 ~ 23:59 發送，超出範圍不打擾
+        if not (8 <= current_hour <= 23):
+            print(f"⏰ [排程器] 現在 {current_hour} 點，超出發送時段（08:00~23:59），跳過。")
+            return
+
+        today_date = now.strftime("%Y-%m-%d")
         events = db.get_calendar_events()
-        
+
         # 篩選今日事件
         today_events = [e for e in events if e.get("event_date") == today_date]
         if not today_events:
-            # 今日無任何任務，不發送通知
             return
-            
+
         remaining_count = sum(1 for e in today_events if e.get("status") == "pending")
         completed_count = sum(1 for e in today_events if e.get("status") == "completed")
         total_count = len(today_events)
-        
-        # 如果沒有未完成的任務，就不再發送提醒，避免打擾使用者
+
+        # 如果沒有未完成的任務，就不發送提醒
         if remaining_count == 0:
-            print("⏰ [排程器] 今日任務已全部完成，不發送2小時提醒。")
+            print("⏰ [排程器] 今日任務已全部完成，不發送小時提醒。")
             return
-            
-        message = f"🔔 每2小時關心進度提醒\n\n今日聊天計畫進度：\n• 總任務：{total_count} 個\n• 已完成：{completed_count} 個\n• 還差：{remaining_count} 個任務未完成！\n"
-        message += "\n💪 還要繼續加油喔！記得在聊天後將任務打勾完成並更新進度。"
-            
-        print(f"⏰ [排程器] 發送每2小時進度通知:\n{message}")
-        
-        # 使用 NotificationManager 發送
+
+        message = f"🔔 每小時關心進度提醒\n\n今日聊天計畫進度：\n• 總任務：{total_count} 個\n• 已完成：{completed_count} 個\n• 還差：{remaining_count} 個任務未完成！\n"
+        message += f"\n📅 {now.strftime('%H:%M')} 提醒：記得在聊天後將任務打勾完成並更新進度。"
+        message += "\n\n💪 視緊時間！今日還有時間，加油！"
+
+        print(f"⏰ [排程器] 發送每小時進度通知:\n{message}")
+
         from modules.notifications import NotificationManager
         notifier = NotificationManager(db)
         notifier.send_all_notifications(message)
     except Exception as e:
-        print(f"❌ 每2小時進度通知發送異常: {e}")
+        print(f"❌ 每小時進度通知發送異常: {e}")
 
 def start_notification_scheduler():
     def scheduler_loop():
         # 等待 10 秒確保 app 已完全啟動
         time.sleep(10)
-        print("⏰ 每2小時進度通知排程器已啟動...")
+        print("⏰ 每小時進度通知排程器已啟動（08:00~23:59 每整點發送）...")
         while True:
             now = datetime.now()
-            # 計算到下一個偶數整點的秒數
+            # 計算到下一個整點的秒數
             next_run = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-            if next_run.hour % 2 != 0:
-                next_run = next_run + timedelta(hours=1)
             sleep_seconds = (next_run - now).total_seconds()
             if sleep_seconds < 10:
-                sleep_seconds = 7200
-                
+                sleep_seconds = 3600
+
             time.sleep(sleep_seconds)
-            send_two_hourly_progress_notification()
-            
+            send_hourly_progress_notification()
+
     t = threading.Thread(target=scheduler_loop, daemon=True)
     t.start()
 
 start_notification_scheduler()
+
 
 # ========== 輔助 ==========
 def today_str():
