@@ -51,8 +51,27 @@ class Database:
         self._auto_backup_and_cleanup()
         self._init_db()
 
+    def _get_table_count(self, db_file: str, table: str) -> int:
+        """取得指定 DB 檔案某張表的列數，失敗回傳 -1"""
+        import sqlite3 as _sqlite3
+        try:
+            conn = _sqlite3.connect(db_file)
+            cur = conn.cursor()
+            cur.execute(f"SELECT COUNT(*) FROM {table}")
+            count = cur.fetchone()[0]
+            conn.close()
+            return count
+        except Exception:
+            return -1
+
     def _auto_backup_and_cleanup(self):
-        """自動備份資料庫並清理 7 天前的舊備份"""
+        """自動備份資料庫並清理 7 天前的舊備份。
+
+        同時偵測雲端同步損毀：若目前 DB 的 contacts 或 interactions 數量
+        遠少於備份中最高水位（差距 >= 3 筆且目前 < 備份的 70%），
+        代表可能是 Google Drive/OneDrive 同步把舊的空版本覆蓋下來，
+        此時自動從「有最多資料」的備份還原，再重新備份一次。
+        """
         import os
         import shutil
         from datetime import datetime, timedelta
@@ -67,16 +86,94 @@ class Database:
             os.makedirs(backup_dir, exist_ok=True)
 
             now = datetime.now()
-            
+            backup_files = sorted(
+                [f for f in os.listdir(backup_dir) if f.startswith("awakening_") and f.endswith(".db")],
+                key=lambda f: os.path.getmtime(os.path.join(backup_dir, f)),
+                reverse=True  # 最新的在前
+            )
+
+            # ── 雲端同步損毀偵測 ──────────────────────────────────────────
+            # contacts：差距 >= 3 筆且目前 < 備份 70% 才觸發（允許正常刪除）
+            # interactions：只要比備份最高水位少就觸發（聊天記錄只增不減）
+            WATCHED_TABLES = [
+                ("contacts",     "loose"),   # 寬鬆：差距 >= 3 且 < 70%
+                ("interactions", "strict"),  # 嚴格：任何減少都觸發
+            ]
+
+            # 找出每張表在備份中的最高水位，以及對應的最佳備份檔
+            best_backup_file = None
+            best_backup_score = -1  # 用 contacts+interactions 總數做為評分
+
+            table_best = {}  # table -> (best_count, best_file)
+            for bf in backup_files:
+                bf_path = os.path.join(backup_dir, bf)
+                score = 0
+                for table, _ in WATCHED_TABLES:
+                    c = self._get_table_count(bf_path, table)
+                    score += max(c, 0)
+                    prev_best, _ = table_best.get(table, (0, None))
+                    if c > prev_best:
+                        table_best[table] = (c, bf)
+                if score > best_backup_score:
+                    best_backup_score = score
+                    best_backup_file = bf
+
+            # 判斷目前 DB 是否有任何一張表觸發損毀條件
+            corruption_detected = False
+            corruption_reason = ""
+            for table, mode in WATCHED_TABLES:
+                best_count, _ = table_best.get(table, (0, None))
+                current = self._get_table_count(self.db_path, table)
+                if mode == "strict":
+                    # 只要比最高水位少就還原
+                    triggered = (best_count > 0 and current >= 0 and current < best_count)
+                else:
+                    # 寬鬆：差距 >= 3 且 < 70%
+                    triggered = (
+                        best_count >= 3
+                        and current >= 0
+                        and current < best_count
+                        and (best_count - current) >= 3
+                        and current < best_count * 0.7
+                    )
+                if triggered:
+                    corruption_detected = True
+                    corruption_reason = (
+                        f"{table}({mode}): current={current}, best_backup={best_count}"
+                    )
+                    break
+
+            if corruption_detected and best_backup_file:
+                restore_src = os.path.join(backup_dir, best_backup_file)
+                emergency_bak = os.path.join(
+                    backup_dir,
+                    f"awakening_corrupt_{now.strftime('%Y%m%d_%H%M%S')}.db"
+                )
+                shutil.copyfile(self.db_path, emergency_bak)  # 保留損毀版本以備查
+                shutil.copyfile(restore_src, self.db_path)
+                print(
+                    f"[Backup] WARNING: Cloud sync corruption detected! "
+                    f"Reason: {corruption_reason}. "
+                    f"Auto-restored from {best_backup_file}. "
+                    f"Corrupt copy saved as {os.path.basename(emergency_bak)}"
+                )
+                # 重新整理 backup_files（還原後需重新判斷）
+                backup_files = sorted(
+                    [f for f in os.listdir(backup_dir)
+                     if f.startswith("awakening_") and f.endswith(".db")
+                     and not f.startswith("awakening_corrupt_")],
+                    key=lambda f: os.path.getmtime(os.path.join(backup_dir, f)),
+                    reverse=True
+                )
+            # ──────────────────────────────────────────────────────────────
+
             # 1. 檢查是否需要備份 (限制每小時最多備份一次，以防爆量)
-            backup_files = [f for f in os.listdir(backup_dir) if f.startswith("awakening_") and f.endswith(".db")]
             need_backup = True
-            
             if backup_files:
-                # 找出最新的一個備份檔
-                latest_backup = max(backup_files, key=lambda f: os.path.getmtime(os.path.join(backup_dir, f)))
-                latest_time = datetime.fromtimestamp(os.path.getmtime(os.path.join(backup_dir, latest_backup)))
-                # 如果最新的備份在 1 小時內，就不重複備份
+                latest_backup = backup_files[0]
+                latest_time = datetime.fromtimestamp(
+                    os.path.getmtime(os.path.join(backup_dir, latest_backup))
+                )
                 if now - latest_time < timedelta(hours=1):
                     need_backup = False
 
