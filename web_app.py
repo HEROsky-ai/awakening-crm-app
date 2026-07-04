@@ -1834,9 +1834,25 @@ def test_remote_access(port=5000):
     t = threading.Thread(target=_do_test, daemon=True)
     t.start()
 
+def _start_watchdog():
+    """背景執行緒：每 5 分鐘做一次雲端同步損毀偵測，即時還原被同步覆蓋的空 DB"""
+    import time
+    interval = 5 * 60  # 5 分鐘
+    while True:
+        time.sleep(interval)
+        try:
+            db._auto_backup_and_cleanup()
+        except Exception as e:
+            print(f"[Watchdog] Error during periodic check: {e}")
+
 if __name__ == '__main__':
     ensure_firewall_rule(5000)
     kill_process_on_port(5000)
+
+    # 啟動背景定期損毀偵測（每 5 分鐘）
+    _wd = threading.Thread(target=_start_watchdog, daemon=True)
+    _wd.start()
+
     storage = get_storage_info()
     print("=" * 50)
     print("  覺醒行動app（公開版）")
