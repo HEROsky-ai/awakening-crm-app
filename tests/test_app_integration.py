@@ -33,8 +33,12 @@ with open(storage_config_path, "w", encoding="utf-8") as f:
     }, f, ensure_ascii=False)
 
 # 導入 web_app 與 database
+# ⚠️ web_app.py 頂部會執行 sys.stdout = io.TextIOWrapper(...)，
+#    這會破壞 pytest 的 stdout capture。先備份再還原。
+_real_stdout = sys.stdout
 from database import Database
 from web_app import app, db
+sys.stdout = _real_stdout  # 還原，讓 pytest capture 正常運作
 
 class AwakeningAppTestCase(unittest.TestCase):
     def setUp(self):

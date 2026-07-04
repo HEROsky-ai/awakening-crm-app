@@ -5,7 +5,6 @@
 """
 
 import sys, io, os
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from datetime import datetime, timedelta
@@ -1846,6 +1845,10 @@ def _start_watchdog():
             print(f"[Watchdog] Error during periodic check: {e}")
 
 if __name__ == '__main__':
+    # 修正 Windows 中文輸出 —— 只在直接執行時替換 stdout
+    if hasattr(sys.stdout, 'buffer'):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
     ensure_firewall_rule(5000)
     kill_process_on_port(5000)
 
