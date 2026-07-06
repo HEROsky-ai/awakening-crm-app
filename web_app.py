@@ -28,6 +28,17 @@ def get_storage_path():
             pass
     return None
 
+def get_port_config():
+    """讀取儲存的 port，沒設定過預設回傳 5000"""
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                return int(cfg.get("port", 5000))
+        except:
+            pass
+    return 5000
+
 def is_storage_configured():
     return get_storage_path() is not None
 
@@ -1894,8 +1905,9 @@ if __name__ == '__main__':
     if hasattr(sys.stdout, 'buffer'):
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-    ensure_firewall_rule(5000)
-    kill_process_on_port(5000)
+    app_port = get_port_config()
+    ensure_firewall_rule(app_port)
+    kill_process_on_port(app_port)
 
     # 啟動背景定期損毀偵測（每 5 分鐘）
     _wd = threading.Thread(target=_start_watchdog, daemon=True)
@@ -1912,14 +1924,14 @@ if __name__ == '__main__':
     else:
         print("  ⚠️  尚未設定儲存位置（第一次使用請到設定頁選擇）")
     print()
-    print("  本機：http://127.0.0.1:5000")
-    print("  區域網路：http://你的IP:5000")
+    print(f"  本機：http://127.0.0.1:{app_port}")
+    print(f"  區域網路：http://你的IP:{app_port}")
     print()
     print("  可直接開啟使用，無需帳號密碼")
     print("  設定 → 儲存位置 → 改成 OneDrive/iCloud/Google Drive 資料夾")
     print("=" * 50)
 
-    test_remote_access(5000)
+    test_remote_access(app_port)
     import webbrowser
-    webbrowser.open('http://127.0.0.1:5000')
-    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+    webbrowser.open(f'http://127.0.0.1:{app_port}')
+    app.run(host='0.0.0.0', port=app_port, debug=False, use_reloader=False)
