@@ -168,7 +168,52 @@
                 </div>
                 
                 <div class="timeline-content-wrapper">
-                    {% if i.content|length > 180 %}
+                    {% if "透過 AI 文字分析自動建檔" in i.content %}
+                    <div class="timeline-content expandable-content">
+                        <div class="text-muted mb-2">{{ i.content }}</div>
+                        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 13px;">
+                            <div class="font-weight-bold text-primary mb-2" style="font-size: 14px;"><i class="fas fa-file-invoice"></i> 智慧建檔提取內容：</div>
+                            {% set has_profile_data = false %}
+                            {% if profile %}
+                                {% set sections = [
+                                    ('家庭狀況', profile.f_family),
+                                    ('家庭備註', profile.f_family_notes),
+                                    ('職業', profile.o_occupation),
+                                    ('工作備註', profile.o_occupation_notes),
+                                    ('工作型態', profile.o_work_style),
+                                    ('興趣', profile.r_interests),
+                                    ('興趣細節', profile.r_interests_detail),
+                                    ('嗜好', profile.r_hobbies),
+                                    ('金錢價值觀', profile.m_money_values),
+                                    ('收入範圍', profile.m_income_range),
+                                    ('投資', profile.m_investment),
+                                    ('財務目標', profile.m_financial_goals),
+                                    ('夢想', profile.d_dreams),
+                                    ('短期目標', profile.d_short_term),
+                                    ('長期目標', profile.d_long_term),
+                                    ('動力來源', profile.d_motivations),
+                                    ('健康狀況', profile.h_health),
+                                    ('健身習慣', profile.h_fitness),
+                                    ('飲食', profile.h_diet),
+                                    ('壓力', profile.h_stress),
+                                    ('健康目標', profile.h_goals)
+                                ] %}
+                                {% for label, val in sections %}
+                                    {% if val and val.strip() %}
+                                        <div class="mb-1"><strong>{{ label }}：</strong>{{ val }}</div>
+                                        {% set has_profile_data = true %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                            {% if not has_profile_data %}
+                                <div class="text-muted">（未提取到任何有效資訊）</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <button class="expand-btn" onclick="toggleExpand(this)">
+                        <i class="fas fa-chevron-down"></i> 展開建檔內容
+                    </button>
+                    {% elif i.content|length > 180 %}
                     <div class="timeline-content expandable-content">
                         {{ i.content }}
                     </div>

@@ -799,6 +799,14 @@ def interaction_list():
         
     type_map = {'chat':'💬 聊天','care':'❤️ 關心','share':'📤 分享','invite':'🎉 邀約','followup':'📞 追蹤'}
     
+    # 載入所有 Profile 供舊的 AI 建檔記錄讀取提取內容
+    conn = db._get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM formdh_profiles")
+    profile_rows = cursor.fetchall()
+    conn.close()
+    profile_map = {row['contact_id']: dict(row) for row in profile_rows}
+    
     return render_template('interactions.html',
         interactions=filtered_interactions,
         keyword=keyword,
@@ -806,7 +814,8 @@ def interaction_list():
         selected_channel=selected_channel,
         type_map=type_map,
         channels=INTERACTION_CHANNELS,
-        types=INTERACTION_TYPES
+        types=INTERACTION_TYPES,
+        profile_map=profile_map
     )
 
 # --- 聯絡人列表 ---
