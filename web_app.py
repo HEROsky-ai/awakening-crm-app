@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import json
 from pathlib import Path
 
-from config import BASE_DIR
+from config import BASE_DIR, INTERACTION_TYPES, INTERACTION_CHANNELS
 from database import Database
 
 # ========== 雲端儲存設定 ==========
@@ -514,7 +514,7 @@ def get_static_html_template(contacts_data, sync_time):
                             <td>${{i.date}}</td>
                             <td>${{i.type}}</td>
                             <td>${{i.channel || \'-\'}}</td>
-                            <td>${{i.content}}</td>
+                            <td style="white-space: pre-wrap; word-break: break-all;">${{i.content}}</td>
                         </tr>
                     `;
                 }});
@@ -751,6 +751,51 @@ def dashboard():
         today_tasks=today_tasks,
         upcoming=upcoming,
         storage=storage
+    )
+
+# --- 互動記錄列表 ---
+
+@app.route('/interactions')
+def interaction_list():
+    contacts = db.get_all_contacts()
+    contact_map = {c['id']: c for c in contacts}
+    
+    keyword = request.args.get('keyword', '').strip()
+    selected_type = request.args.get('type', '').strip()
+    selected_channel = request.args.get('channel', '').strip()
+    
+    interactions = db.get_all_interactions()
+    filtered_interactions = []
+    
+    for i in interactions:
+        contact = contact_map.get(i.get('contact_id'))
+        contact_name = contact['name'] if contact else '未知聯絡人'
+        i['contact_name'] = contact_name
+        
+        # 篩選邏輯
+        if selected_type and i.get('type') != selected_type:
+            continue
+        if selected_channel and i.get('channel') != selected_channel:
+            continue
+        if keyword:
+            keyword_lower = keyword.lower()
+            name_match = keyword_lower in contact_name.lower()
+            content_match = keyword_lower in i.get('content', '').lower()
+            notes_match = keyword_lower in i.get('notes', '').lower()
+            if not (name_match or content_match or notes_match):
+                continue
+        filtered_interactions.append(i)
+        
+    type_map = {'chat':'💬 聊天','care':'❤️ 關心','share':'📤 分享','invite':'🎉 邀約','followup':'📞 追蹤'}
+    
+    return render_template('interactions.html',
+        interactions=filtered_interactions,
+        keyword=keyword,
+        selected_type=selected_type,
+        selected_channel=selected_channel,
+        type_map=type_map,
+        channels=INTERACTION_CHANNELS,
+        types=INTERACTION_TYPES
     )
 
 # --- 聯絡人列表 ---

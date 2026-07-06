@@ -147,23 +147,49 @@
     💬 互動記錄（{{ interactions|length }} 筆）
 </h2>
 
-<div class="card">
+<div class="card p-4">
     {% if interactions %}
-    <div class="table-wrap">
-        <table>
-            <tr><th>日期</th><th>類型</th><th>內容</th><th>管道</th></tr>
-            {% for i in interactions %}
-            <tr>
-                <td>{{ i.date }}</td>
-                <td>
-                    {% set type_map = {'chat':'💬 聊天','care':'❤️ 關心','share':'📤 分享','invite':'🎉 邀約','followup':'📞 追蹤'} %}
-                    {{ type_map.get(i.type, i.type) }}
-                </td>
-                <td>{{ i.content }}</td>
-                <td>{{ i.channel or '-' }}</td>
-            </tr>
-            {% endfor %}
-        </table>
+    <div class="timeline">
+        {% set type_map = {'chat':'💬 聊天','care':'❤️ 關心','share':'📤 分享','invite':'🎉 邀約','followup':'📞 追蹤'} %}
+        {% for i in interactions %}
+        <div class="timeline-item">
+            <div class="timeline-badge" style="border-color: {% if i.type == 'chat' %}#4f46e5{% elif i.type == 'care' %}#10b981{% elif i.type == 'share' %}#3b82f6{% elif i.type == 'invite' %}#f59e0b{% else %}#ef4444{% endif %};"></div>
+            <div class="timeline-card">
+                <div class="timeline-header">
+                    <div class="timeline-meta">
+                        <span class="tag {% if i.type == 'chat' %}tag-blue{% elif i.type == 'care' %}tag-green{% elif i.type == 'share' %}tag-purple{% elif i.type == 'invite' %}tag-orange{% else %}tag-red{% endif %}">
+                            {{ type_map.get(i.type, i.type) }}
+                        </span>
+                        {% if i.channel %}
+                        <span class="tag tag-gray">{{ i.channel }}</span>
+                        {% endif %}
+                    </div>
+                    <span class="timeline-date"><i class="far fa-calendar-alt me-1"></i> {{ i.date }}</span>
+                </div>
+                
+                <div class="timeline-content-wrapper">
+                    {% if i.content|length > 180 %}
+                    <div class="timeline-content expandable-content">
+                        {{ i.content }}
+                    </div>
+                    <button class="expand-btn" onclick="toggleExpand(this)">
+                        <i class="fas fa-chevron-down"></i> 展開全文
+                    </button>
+                    {% else %}
+                    <div class="timeline-content">
+                        {{ i.content }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if i.notes %}
+                <div class="timeline-notes">
+                    <i class="far fa-comment-dots me-1"></i> <strong>備註:</strong> {{ i.notes }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
     </div>
     {% else %}
     <div class="empty-state"><p>尚無互動記錄</p></div>
@@ -202,4 +228,19 @@
         <button type="submit" class="btn btn-success">儲存互動記錄</button>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleExpand(btn) {
+    const content = btn.previousElementSibling;
+    if (content.classList.contains('expanded')) {
+        content.classList.remove('expanded');
+        btn.innerHTML = '<i class="fas fa-chevron-down"></i> 展開全文';
+    } else {
+        content.classList.add('expanded');
+        btn.innerHTML = '<i class="fas fa-chevron-up"></i> 收合全文';
+    }
+}
+</script>
 {% endblock %}
