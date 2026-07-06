@@ -291,7 +291,7 @@ class AwakeningAppTestCase(unittest.TestCase):
             # 驗證是否新增了系統建檔的互動記錄
             interactions = self.db.get_interactions(c['id'])
             self.assertEqual(len(interactions), 1)
-            self.assertIn('透過 AI 文字分析自動建檔', interactions[0]['content'])
+            self.assertIn('我今天認識了陳阿明', interactions[0]['content'])
 
     def test_11_self_healing_profile(self):
         """測試當聯絡人缺少 FORMDH 檔案時，系統會自動建立 (自我修復)"""

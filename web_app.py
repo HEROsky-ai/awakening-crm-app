@@ -1287,7 +1287,7 @@ def smart_update():
             contact_id=matched_contact['id'],
             type='chat',
             date=today_str(),
-            content=text[:200],
+            content=text,
             notes='',
             channel='智能更新'
         )
@@ -1625,8 +1625,8 @@ def contacts_ai_import():
         contact_id=contact_id,
         type='chat',
         date=datetime.now().strftime("%Y-%m-%d"),
-        content=f"透過 AI 文字分析自動建檔，輸入內容長度 {len(raw_text)} 字。",
-        notes='由 AI 文字建檔功能自動生成',
+        content=raw_text,
+        notes='透過 AI 文字分析自動建檔',
         channel='系統'
     )
     db.add_interaction(interaction)
