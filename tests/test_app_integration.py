@@ -473,6 +473,108 @@ class AwakeningAppTestCase(unittest.TestCase):
         except:
             pass
 
+    def test_14_add_interaction_postpones_pending_events(self):
+        """測試新增互動記錄（例如 chat）時，該聯絡人未來的 pending 關心任務會自動往後延 7 天"""
+        from database.models import Contact, CalendarEvent, Interaction
+        
+        # 1. 建立測試聯絡人
+        c = Contact(
+            name="延期測試聯絡人",
+            source="系統測試"
+        )
+        self.db.add_contact(c)
+        
+        # 2. 建立 pending 關心任務，日期設定為 2026-08-01
+        event = CalendarEvent(
+            contact_id=c.id,
+            title=f"關心：{c.name}",
+            description="原因：測試",
+            event_date="2026-08-01",
+            event_time="14:00",
+            event_type="followup",
+            status="pending"
+        )
+        self.db.add_calendar_event(event)
+        
+        # 3. 驗證資料庫中有此事件且日期為 2026-08-01
+        events_before = self.db.get_calendar_events(contact_id=c.id)
+        self.assertEqual(len(events_before), 1)
+        self.assertEqual(events_before[0]["event_date"], "2026-08-01")
+        
+        # 4. 新增一筆聊天互動記錄
+        interaction = Interaction(
+            contact_id=c.id,
+            type="chat",
+            date="2026-07-10",
+            content="今天跟他聊得很開心",
+            notes="",
+            channel="LINE"
+        )
+        self.db.add_interaction(interaction)
+        
+        # 5. 驗證該關心任務日期是否自動推遲到 2026-08-08 (原日期 2026-08-01 + 7 天)
+        events_after = self.db.get_calendar_events(contact_id=c.id)
+        self.assertEqual(len(events_after), 1)
+        self.assertEqual(events_after[0]["event_date"], "2026-08-08")
+
+    def test_15_auto_schedule_spills_over_to_third_month(self):
+        """測試當第 1 和第 2 個月額度已滿時，一般聯絡人自動被排入第 3 個月"""
+        from database.models import Contact, CalendarEvent
+        from modules.planner import Planner
+        from datetime import datetime, timedelta
+        
+        # 為了獨立測試，先清空聯絡人與事件
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM contacts")
+        cursor.execute("DELETE FROM calendar_events")
+        conn.commit()
+        
+        # 建立虛擬聯絡人，供模擬已排程事件作為外鍵參考
+        dummy_contact = Contact(
+            name="虛擬人",
+            source="系統測試"
+        )
+        self.db.add_contact(dummy_contact)
+
+        # 建立一個常規聯絡人 (建立於 10 天前)
+        c = Contact(
+            name="溢出測試人",
+            source="系統測試",
+            created_at=(datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d %H:%M"),
+            last_interaction=(datetime.now() - timedelta(days=20)).strftime("%Y-%m-%d")
+        )
+        self.db.add_contact(c)
+        
+        # 模擬第 1 與第 2 個月（即今日起 65 天內）的每一天都排滿 15 人上限
+        today = datetime.now()
+        for d in range(65):
+            date_str = (today + timedelta(days=d)).strftime("%Y-%m-%d")
+            for i in range(15):
+                cursor.execute("""
+                    INSERT INTO calendar_events (contact_id, title, description, event_date, event_time, event_type, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (dummy_contact.id, "關心：測試", "原因：測試", date_str, "14:00", "followup", "pending"))
+        conn.commit()
+        conn.close()
+        
+        # 執行自動規劃
+        planner = Planner(self.db)
+        count = planner.auto_schedule_interactions()
+        self.assertEqual(count, 1) # 只有「溢出測試人」這 1 個需要被排程
+        
+        # 取得該測試人的關心事件日期
+        events = self.db.get_calendar_events(contact_id=c.id)
+        self.assertEqual(len(events), 1)
+        scheduled_date_str = events[0]["event_date"]
+        scheduled_date = datetime.strptime(scheduled_date_str, "%Y-%m-%d")
+        
+        # 驗證排程日期是否確實落在第 3 個月 (即 m=2)
+        # 第 3 個月的第一天起算日期應該大於今天起算的第 2 個月的月底
+        # 我們可以直接檢查 scheduled_date 和 today 的月份差是否等於 2 (例如 7月到9月差為2)
+        month_diff = (scheduled_date.year - today.year) * 12 + (scheduled_date.month - today.month)
+        self.assertEqual(month_diff, 2, f"應排在第 3 個月 (月份差為2)，實際排在: {scheduled_date_str}")
+
 # 測試結束後還原正式的設定檔
 def restore_backup():
     if backup_config_path.exists():

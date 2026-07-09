@@ -380,12 +380,12 @@ class Planner:
                 total_scheduled += 1
                 auto_counts[scheduled_date] = auto_counts.get(scheduled_date, 0) + 1
                 
-        # 6. 排程一般聯絡人，隨機平均分配到 12 個月中
+        # 6. 排程一般聯絡人，隨機平均分配到 2 個月中
         if regular_contacts:
             random.shuffle(regular_contacts)
-            buckets = [[] for _ in range(12)]
+            buckets = [[] for _ in range(2)]
             for i, c in enumerate(regular_contacts):
-                buckets[i % 12].append(c)
+                buckets[i % 2].append(c)
                 
             carry_over = []
             
@@ -397,7 +397,7 @@ class Planner:
                 return dates
                 
             m = 0
-            while m < 12 or carry_over:
+            while m < 2 or carry_over:
                 target_year = current_date.year + (current_date.month - 1 + m) // 12
                 target_month = (current_date.month - 1 + m) % 12 + 1
                 
@@ -405,12 +405,12 @@ class Planner:
                 dates = get_dates_in_month(target_year, target_month, start_day)
                 
                 current_month_contacts = list(carry_over)
-                if m < 12:
+                if m < 2:
                     current_month_contacts.extend(buckets[m])
                 carry_over = []
                 
                 if not current_month_contacts:
-                    if m >= 12:
+                    if m >= 2:
                         break
                     m += 1
                     continue

@@ -548,6 +548,29 @@ class Database:
                 WHERE id = ?
             """, (d["date"], datetime.now().strftime("%Y-%m-%d %H:%M"), d["contact_id"]))
             
+            # 自動調整行事曆中的 pending 關心事件日期 (新增聊天狀況時往後延 1 週)
+            from datetime import timedelta
+            cursor.execute("""
+                SELECT id, event_date FROM calendar_events 
+                WHERE contact_id = ? AND status = 'pending' AND event_type = 'followup'
+            """, (d["contact_id"],))
+            pending_events = cursor.fetchall()
+            for ev in pending_events:
+                ev_dict = dict(ev)
+                orig_date_str = ev_dict.get("event_date")
+                if orig_date_str:
+                    try:
+                        orig_date = datetime.strptime(orig_date_str, "%Y-%m-%d")
+                        new_date = orig_date + timedelta(days=7)
+                        new_date_str = new_date.strftime("%Y-%m-%d")
+                        cursor.execute("""
+                            UPDATE calendar_events 
+                            SET event_date = ? 
+                            WHERE id = ?
+                        """, (new_date_str, ev_dict["id"]))
+                    except Exception as ex:
+                        print(f"自動調整行事曆日期失敗: {ex}")
+
             conn.commit()
             return True
         except Exception as e:
