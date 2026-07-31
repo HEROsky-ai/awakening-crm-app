@@ -1292,6 +1292,29 @@ def smart_update():
     if any(kw in text for kw in ['女兒', '兒子', '小孩', '孩子', '家庭', '家人']):
         profile_updates['f_family_notes'] = text
 
+    # 個人基本資訊（住所、星座、生日）→ 附加到家庭備註欄
+    personal_info_parts = []
+    for kw in ['住在', '住台', '住新', '住高', '住桃', '住台北', '住台中', '住台南']:
+        if kw in text:
+            idx = text.find(kw)
+            loc = text[idx:].split('，')[0].split('。')[0].split('、')[0].split(' ')[0][:20]
+            if loc:
+                personal_info_parts.append(f"住：{loc.replace(kw,'').strip() or loc}")
+            break
+    if '星座' in text:
+        idx = text.find('星座')
+        zodiac = text[idx:].split('，')[0].split('。')[0].split('、')[0][:15]
+        personal_info_parts.append(f"星座：{zodiac.replace('星座','').replace('是','').replace('：','').strip()}")
+    if '生日' in text or '出生' in text:
+        kw = '生日' if '生日' in text else '出生'
+        idx = text.find(kw)
+        bday = text[idx:].split('，')[0].split('。')[0].split('、')[0][:20]
+        personal_info_parts.append(f"生日：{bday.replace(kw,'').replace('是','').replace('：','').strip()}")
+    if personal_info_parts:
+        existing = profile_updates.get('f_family_notes', '')
+        suffix = '｜'.join(personal_info_parts)
+        profile_updates['f_family_notes'] = (existing + '｜' + suffix).strip('｜') if existing else suffix
+
     # 興趣相關
     if any(kw in text for kw in ['喜歡', '興趣', '嗜好', '愛', '熱愛', '爬山', '運動', '旅遊']):
         profile_updates['r_interests'] = text

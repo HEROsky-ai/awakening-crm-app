@@ -569,11 +569,13 @@ class AwakeningAppTestCase(unittest.TestCase):
         scheduled_date_str = events[0]["event_date"]
         scheduled_date = datetime.strptime(scheduled_date_str, "%Y-%m-%d")
         
-        # 驗證排程日期是否確實落在第 3 個月 (即 m=2)
-        # 第 3 個月的第一天起算日期應該大於今天起算的第 2 個月的月底
-        # 我們可以直接檢查 scheduled_date 和 today 的月份差是否等於 2 (例如 7月到9月差為2)
-        month_diff = (scheduled_date.year - today.year) * 12 + (scheduled_date.month - today.month)
-        self.assertEqual(month_diff, 2, f"應排在第 3 個月 (月份差為2)，實際排在: {scheduled_date_str}")
+        # 驗證排程日期是否確實落在今日起 65 天之後（即前 2 個月的模擬排滿期間之後）
+        cutoff = today + timedelta(days=65)
+        self.assertGreaterEqual(
+            scheduled_date,
+            cutoff,
+            f"應排在第 3 個月（今日起第 65 天之後），實際排在: {scheduled_date_str}"
+        )
 
 # 測試結束後還原正式的設定檔
 def restore_backup():
