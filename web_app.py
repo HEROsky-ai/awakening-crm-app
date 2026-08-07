@@ -1432,7 +1432,7 @@ def upload_image():
             contact_id = existing[0]['id']
         else:
             from database.models import Contact
-            contact = Contact(name=name, source='名片OCR', tags=[])
+            contact = Contact(name=name, source='名片OCR', tags='')
             db.add_contact(contact)
             contact_id = contact.id
 
@@ -1695,8 +1695,16 @@ def contacts_ai_import():
     updates = {}
     for f in fields:
         # 只在 AI 有提取出有效資訊時寫入，避免把原本已有的資料覆蓋為空
-        val = parsed_data.get(f, '').strip()
-        if val and val not in ["家庭狀況", "家庭狀況備註", "職業", "工作狀況備註", "工作型態", "興趣愛好", "興趣詳細描述", "業餘活動與嗜好", "金錢觀", "收入區間", "投資理財態度", "財務目標", "夢想目標", "短期夢想", "長期夢想", "動機與渴望", "健康狀況", "健身與運動習慣", "飲食與作息", "壓力來源", "健康目標", "AI 聊天與關係建立建議內容", "推薦聊天時事與話題", "目前缺少資訊的引導問話建議"]:
+        raw_val = parsed_data.get(f, '')
+        # 安全轉換：list → 逗號字串，dict → JSON 字串，其他 → str()
+        if isinstance(raw_val, list):
+            raw_val = ', '.join(str(x) for x in raw_val)
+        elif isinstance(raw_val, dict):
+            raw_val = json.dumps(raw_val, ensure_ascii=False)
+        elif not isinstance(raw_val, str):
+            raw_val = str(raw_val) if raw_val else ''
+        val = raw_val.strip()
+        if val and val not in ["家庭狀況", "家庭狀況備註", "家庭備註（含住所、星座、生日等個人資訊，格式如：住：台北大安區｜星座：天秤座｜生日：10/15）", "職業", "工作狀況備註", "工作型態", "興趣愛好", "興趣詳細描述", "業餘活動與嗜好", "金錢觀", "收入區間", "投資理財態度", "財務目標", "夢想目標", "短期夢想", "長期夢想", "動機與渴望", "健康狀況", "健身與運動習慣", "飲食與作息", "壓力來源", "健康目標", "AI 聊天與關係建立建議內容", "推薦聊天時事與話題", "目前缺少資訊的引導問話建議", "3個具體聊天切入點（開場話題→延伸問題的組合）", "2-3個時事或資訊推薦（含如何帶入的一句話）", "針對缺少維度的兩步迂迴引導話術（每個維度含步驟一與步驟二）"]:
             updates[f] = val
             
     if updates:

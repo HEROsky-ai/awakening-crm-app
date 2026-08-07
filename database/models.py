@@ -27,7 +27,11 @@ class Contact:
 
     def to_dict(self):
         d = asdict(self)
-        d["tags"] = json.dumps(self.tags, ensure_ascii=False)
+        # 防護：tags 可能被傳入字串（AI 建檔路徑），統一轉成 list 再序列化
+        tags = self.tags
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(',') if t.strip()] if tags else []
+        d["tags"] = json.dumps(tags, ensure_ascii=False)
         return d
 
     @classmethod
