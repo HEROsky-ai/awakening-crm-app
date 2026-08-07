@@ -603,11 +603,43 @@ db = Database()
 import threading
 import time
 
+def send_morning_daily_reminder():
+    """早上 09:00 專屬的每日行事曆提醒（含今日完整任務清單）"""
+    try:
+        from modules.notifications import NotificationManager
+        now = datetime.now()
+        today_date = now.strftime("%Y-%m-%d")
+        events = db.get_calendar_events()
+        today_events = [e for e in events if e.get("event_date") == today_date and e.get("status") == "pending"]
+
+        if not today_events:
+            message = f"☀️ 早安！{now.strftime('%m/%d')} 今日無待辦關心任務，繼續保持！"
+        else:
+            message = f"☀️ 早安！{now.strftime('%m/%d')} 今日聊天計畫\n\n"
+            message += f"📋 共 {len(today_events)} 位需要關心：\n"
+            for e in today_events:
+                contact = db.get_contact(e.get("contact_id"))
+                name = contact["name"] if contact else "未知"
+                desc = e.get("description", "").split("\n")[0]  # 取第一行（原因）
+                message += f"  • {name}  {desc}\n"
+            message += "\n💬 記得今天完成後在 App 中標記完成！"
+
+        print(f"☀️ [09:00 提醒] 發送早安任務通知:\n{message}")
+        notifier = NotificationManager(db)
+        notifier.send_all_notifications(message)
+    except Exception as e:
+        print(f"❌ 早安提醒發送異常: {e}")
+
+
 def send_hourly_progress_notification():
     """發送每小時進度通知（08:00 ~ 23:59，有未完成任務才發送）"""
     try:
         now = datetime.now()
         current_hour = now.hour
+
+        # 09:00 額外觸發早安每日提醒
+        if current_hour == 9:
+            send_morning_daily_reminder()
 
         # 僅在 08:00 ~ 23:59 發送，超出範圍不打擾
         if not (8 <= current_hour <= 23):
@@ -631,6 +663,10 @@ def send_hourly_progress_notification():
             print("⏰ [排程器] 今日任務已全部完成，不發送小時提醒。")
             return
 
+        # 09:00 已另發早安提醒，整點提醒改為較簡短版本避免重複
+        if current_hour == 9:
+            return
+
         message = f"🔔 每小時關心進度提醒\n\n今日聊天計畫進度：\n• 總任務：{total_count} 個\n• 已完成：{completed_count} 個\n• 還差：{remaining_count} 個任務未完成！\n"
         message += f"\n📅 {now.strftime('%H:%M')} 提醒：記得在聊天後將任務打勾完成並更新進度。"
         message += "\n\n💪 視緊時間！今日還有時間，加油！"
@@ -647,7 +683,7 @@ def start_notification_scheduler():
     def scheduler_loop():
         # 等待 10 秒確保 app 已完全啟動
         time.sleep(10)
-        print("⏰ 每小時進度通知排程器已啟動（08:00~23:59 每整點發送）...")
+        print("⏰ 每小時進度通知排程器已啟動（08:00~23:59 每整點發送，09:00 額外發送早安任務清單）...")
         while True:
             now = datetime.now()
             # 計算到下一個整點的秒數
@@ -663,6 +699,7 @@ def start_notification_scheduler():
     t.start()
 
 start_notification_scheduler()
+
 
 
 # ========== 輔助 ==========
