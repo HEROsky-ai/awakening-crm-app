@@ -1652,6 +1652,9 @@ def contacts_ai_import():
             
         from database.models import Contact
         tags = parsed_data.get('tags', [])
+        # AI 回傳的 tags 可能是 list，需轉成字串
+        if isinstance(tags, list):
+            tags = ', '.join(tags)
         contact = Contact(
             name=name,
             source=parsed_data.get('source') or 'AI 智慧建檔',
