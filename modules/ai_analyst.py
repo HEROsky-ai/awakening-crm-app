@@ -203,7 +203,7 @@ def analyze_contact_info(
     openrouter_err = None
 
     if gemini_key:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key={gemini_key}"
         headers = {"Content-Type": "application/json"}
         
         parts = []
@@ -230,7 +230,7 @@ def analyze_contact_info(
         max_retries = 2
         for attempt in range(max_retries):
             try:
-                print(f"嘗試呼叫原生 Google Gemini API (gemini-2.5-flash，第 {attempt + 1} 次)...")
+                print(f"嘗試呼叫原生 Google Gemini API (gemini-3.1-pro-preview，第 {attempt + 1} 次)...")
                 response = requests.post(url, headers=headers, json=payload, timeout=40)
                 if response.status_code == 200:
                     result_json = response.json()
