@@ -641,9 +641,9 @@ def send_hourly_progress_notification():
         if current_hour == 9:
             send_morning_daily_reminder()
 
-        # 僅在 08:00 ~ 23:59 發送，超出範圍不打擾
-        if not (8 <= current_hour <= 23):
-            print(f"⏰ [排程器] 現在 {current_hour} 點，超出發送時段（08:00~23:59），跳過。")
+        # 僅在 09:00 ~ 23:59 發送，超出範圍不打擾
+        if not (9 <= current_hour <= 23):
+            print(f"⏰ [排程器] 現在 {current_hour} 點，超出發送時段（09:00~23:59），跳過。")
             return
 
         today_date = now.strftime("%Y-%m-%d")
