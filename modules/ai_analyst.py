@@ -196,169 +196,164 @@ def analyze_contact_info(
     if processed_images:
         text_content += f"（請一併對上傳的 {len(processed_images)} 張圖片進行 OCR 辨識與內容提取分析，若為長圖切片請合併上下文解讀）\n"
 
-    # ==========================================
-    # 通道 1: 嘗試原生的 Google Gemini API
-    # ==========================================
-    gemini_err = None
-    openrouter_err = None
+    import time
 
-    if gemini_key:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key={gemini_key}"
-        headers = {"Content-Type": "application/json"}
-        
-        parts = []
-        for img_bytes, m_type in processed_images:
-            try:
-                base64_data = base64.b64encode(img_bytes).decode("utf-8")
-                parts.append({
-                    "inlineData": {
-                        "mimeType": m_type,
-                        "data": base64_data
-                    }
-                })
-            except Exception as e:
-                print(f"原生 Gemini 圖片編碼失敗: {e}")
-                
-        parts.append({"text": text_content})
-        
-        payload = {
-            "contents": [{"parts": parts}],
-            "generationConfig": {"responseMimeType": "application/json"}
-        }
-        
-        import time
-        max_retries = 2
-        for attempt in range(max_retries):
-            try:
-                print(f"嘗試呼叫原生 Google Gemini API (gemini-3.1-pro-preview，第 {attempt + 1} 次)...")
-                response = requests.post(url, headers=headers, json=payload, timeout=40)
-                if response.status_code == 200:
-                    result_json = response.json()
-                    text_response = None
-                    try:
-                        if "candidates" in result_json:
-                            text_response = result_json["candidates"][0]["content"]["parts"][0]["text"].strip()
-                        elif "contents" in result_json:
-                            text_response = result_json["contents"][0]["parts"][0]["text"].strip()
-                        else:
-                            gemini_err = f"原生 Gemini 回傳格式中找不到 candidates 或 contents: {json.dumps(result_json)}"
-                            print(gemini_err)
-                    except Exception as ex:
-                        gemini_err = f"解析原生 Gemini 回傳欄位出錯: {str(ex)}，回傳內容: {json.dumps(result_json)}"
-                        print(gemini_err)
+    # ================================================================
+    # 共用：組合 Google 原生 API 的 parts（圖片 + 文字）
+    # ================================================================
+    native_parts = []
+    for img_bytes, m_type in processed_images:
+        try:
+            base64_data = base64.b64encode(img_bytes).decode("utf-8")
+            native_parts.append({
+                "inlineData": {"mimeType": m_type, "data": base64_data}
+            })
+        except Exception as e:
+            print(f"原生 Gemini 圖片編碼失敗: {e}")
+    native_parts.append({"text": text_content})
+    native_payload = {
+        "contents": [{"parts": native_parts}],
+        "generationConfig": {"responseMimeType": "application/json"}
+    }
 
-                    if text_response:
-                        parsed = clean_and_parse_json(text_response)
+    # 共用：組合 OpenRouter 相容的 multimodal 訊息格式
+    or_content_parts = [{"type": "text", "text": text_content}]
+    for img_bytes, m_type in processed_images:
+        try:
+            base64_data = base64.b64encode(img_bytes).decode("utf-8")
+            or_content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{m_type};base64,{base64_data}"}
+            })
+        except Exception as e:
+            print(f"OpenRouter 圖片編碼失敗: {e}")
+
+    native_headers = {"Content-Type": "application/json"}
+
+    def try_native_gemini(model_id: str, tier: int):
+        """嘗試呼叫 Google 原生 Gemini API，成功回傳 parsed dict，失敗回傳 None"""
+        if not gemini_key:
+            return None, f"未設定 Gemini API Key"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={gemini_key}"
+        for attempt in range(2):
+            try:
+                print(f"[第{tier}層] 嘗試 Google Gemini ({model_id})，第 {attempt+1} 次...")
+                resp = requests.post(url, headers=native_headers, json=native_payload, timeout=60)
+                if resp.status_code == 200:
+                    rj = resp.json()
+                    text_resp = None
+                    if "candidates" in rj:
+                        text_resp = rj["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    elif "contents" in rj:
+                        text_resp = rj["contents"][0]["parts"][0]["text"].strip()
+                    if text_resp:
+                        parsed = clean_and_parse_json(text_resp)
                         if parsed:
                             parsed["status"] = "ok"
-                            parsed["ai_provider"] = "Google Gemini (Native)"
-                            return parsed
-                        else:
-                            gemini_err = "原生 Gemini 回傳內容非有效 JSON 格式"
+                            parsed["ai_provider"] = f"Google Gemini ({model_id})"
+                            return parsed, None
+                        return None, f"[{model_id}] JSON 解析失敗"
+                    return None, f"[{model_id}] 回傳格式異常"
                 else:
-                    gemini_err = f"原生 Gemini HTTP {response.status_code}: {response.text[:100]}"
-                    print(f"原生 Gemini API 請求失敗: {gemini_err}")
+                    err = f"[{model_id}] HTTP {resp.status_code}: {resp.text[:100]}"
+                    print(err)
+                    if resp.status_code in [400, 401, 403, 404]:
+                        return None, err
             except Exception as e:
-                gemini_err = f"原生 Gemini 異常: {str(e)}"
-                print(f"呼叫原生 Gemini 異常: {gemini_err}")
-                
-            if attempt < max_retries - 1:
-                if 'response' in locals() and response.status_code in [400, 401, 403, 404]:
-                    break
-                print("原生 Gemini 請求失敗，將於 2 秒後自動重試...")
+                print(f"[{model_id}] 異常: {e}")
+                if attempt == 1:
+                    return None, str(e)
+            if attempt == 0:
+                print(f"[{model_id}] 失敗，2 秒後重試...")
                 time.sleep(2)
+        return None, f"[{model_id}] 重試後仍失敗"
 
-    # ==========================================
-    # 通道 2: 備用通道 - OpenRouter API (Gemini 2.5 Flash)
-    # ==========================================
-    if config_openrouter:
-        url = "https://openrouter.ai/api/v1/chat/completions"
-        headers = {
+    def try_openrouter(model_id: str, tier: int):
+        """嘗試呼叫 OpenRouter API，成功回傳 parsed dict，失敗回傳 None"""
+        if not config_openrouter:
+            return None, "未設定 OpenRouter API Key"
+        or_headers = {
             "Authorization": f"Bearer {config_openrouter}",
             "Content-Type": "application/json",
             "HTTP-Referer": "http://localhost:5000",
             "X-Title": "Awakening CRM App"
         }
-        
-        # 組合 OpenAI/OpenRouter 相容的 multimodal 訊息格式
-        content_parts = [{"type": "text", "text": text_content}]
-        
-        for img_bytes, m_type in processed_images:
-            try:
-                base64_data = base64.b64encode(img_bytes).decode("utf-8")
-                content_parts.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{m_type};base64,{base64_data}"
-                    }
-                })
-            except Exception as e:
-                print(f"OpenRouter 圖片編碼失敗: {e}")
-                
-        payload = {
-            "model": "google/gemini-2.5-flash",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": content_parts
-                }
-            ],
-            "max_tokens": 1800,
+        or_payload = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": or_content_parts}],
+            "max_tokens": 2000,
             "response_format": {"type": "json_object"}
         }
-        
-        import time
-        max_retries = 2
-        for attempt in range(max_retries):
+        for attempt in range(2):
             try:
-                print(f"原生 Gemini 失敗或金鑰缺失，嘗試呼叫 OpenRouter API (google/gemini-2.5-flash，第 {attempt + 1} 次)...")
-                response = requests.post(url, headers=headers, json=payload, timeout=50)
-                if response.status_code == 200:
-                    result_json = response.json()
-                    text_response = result_json["choices"][0]["message"]["content"].strip()
-                    parsed = clean_and_parse_json(text_response)
+                print(f"[第{tier}層] 嘗試 OpenRouter ({model_id})，第 {attempt+1} 次...")
+                resp = requests.post("https://openrouter.ai/api/v1/chat/completions",
+                                     headers=or_headers, json=or_payload, timeout=60)
+                if resp.status_code == 200:
+                    text_resp = resp.json()["choices"][0]["message"]["content"].strip()
+                    parsed = clean_and_parse_json(text_resp)
                     if parsed:
                         parsed["status"] = "ok"
-                        parsed["ai_provider"] = "Google Gemini (via OpenRouter)"
-                        return parsed
-                    else:
-                        openrouter_err = "OpenRouter 回傳內容非有效 JSON 格式"
+                        parsed["ai_provider"] = f"OpenRouter ({model_id})"
+                        return parsed, None
+                    return None, f"[OR:{model_id}] JSON 解析失敗"
                 else:
-                    openrouter_err = f"OpenRouter HTTP {response.status_code}: {response.text[:100]}"
-                    print(f"OpenRouter API 請求失敗: {openrouter_err}")
+                    err = f"[OR:{model_id}] HTTP {resp.status_code}: {resp.text[:100]}"
+                    print(err)
+                    if resp.status_code in [400, 401, 403, 404]:
+                        return None, err
             except Exception as e:
-                openrouter_err = f"呼叫 OpenRouter 異常: {str(e)}"
-                print(openrouter_err)
-                
-            if attempt < max_retries - 1:
-                if 'response' in locals() and response.status_code in [400, 401, 403, 404]:
-                    break
-                print("OpenRouter 請求失敗，將於 2 秒後自動重試...")
+                print(f"[OR:{model_id}] 異常: {e}")
+                if attempt == 1:
+                    return None, str(e)
+            if attempt == 0:
+                print(f"[OR:{model_id}] 失敗，2 秒後重試...")
                 time.sleep(2)
+        return None, f"[OR:{model_id}] 重試後仍失敗"
 
-    # ==========================================
-    # 金鑰缺失或全部失敗的錯誤處理
-    # ==========================================
+    # ================================================================
+    # 5 層漸降備援鏈
+    # ================================================================
+    all_errors = []
+
+    # 第 1 層：Google 原生 gemini-3.1-pro-preview（最強）
+    result, err = try_native_gemini("gemini-3.1-pro-preview", 1)
+    if result:
+        return result
+    all_errors.append(err)
+
+    # 第 2 層：Google 原生 gemini-2.5-pro
+    result, err = try_native_gemini("gemini-2.5-pro", 2)
+    if result:
+        return result
+    all_errors.append(err)
+
+    # 第 3 層：Google 原生 gemini-2.5-flash
+    result, err = try_native_gemini("gemini-2.5-flash", 3)
+    if result:
+        return result
+    all_errors.append(err)
+
+    # 第 4 層：OpenRouter → google/gemini-2.5-pro
+    result, err = try_openrouter("google/gemini-2.5-pro", 4)
+    if result:
+        return result
+    all_errors.append(err)
+
+    # 第 5 層：OpenRouter → google/gemini-2.5-flash（最後保底）
+    result, err = try_openrouter("google/gemini-2.5-flash", 5)
+    if result:
+        return result
+    all_errors.append(err)
+
+    # 全部失敗
     if not gemini_key and not config_openrouter:
-        return {
-            "status": "error", 
-            "msg": "未設定 Gemini 或 OpenRouter API Key。請前往『設定』頁面設定。"
-        }
-        
-    err_details = []
-    if gemini_err:
-        err_details.append(gemini_err)
-    if openrouter_err:
-        err_details.append(openrouter_err)
-        
-    error_msg = "AI 分析服務目前無法連線，請檢查 API Key 或網路狀況。"
-    if err_details:
-        error_msg += " 詳細錯誤：" + "；".join(err_details)
-        
-    return {
-        "status": "error", 
-        "msg": error_msg
-    }
+        return {"status": "error", "msg": "未設定 Gemini 或 OpenRouter API Key。請前往『設定』頁面設定。"}
+
+    error_msg = "AI 分析服務目前無法連線（已嘗試 5 層備援），請檢查 API Key 或網路狀況。"
+    error_msg += " 詳細錯誤：" + "；".join(filter(None, all_errors))
+    return {"status": "error", "msg": error_msg}
+
 
 def clean_and_parse_json(text: str) -> Optional[Dict]:
     """清洗並解析 API 回傳的 JSON 字串"""
