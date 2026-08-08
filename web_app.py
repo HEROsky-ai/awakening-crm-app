@@ -1864,16 +1864,22 @@ def kill_process_on_port(port):
     import time
     import os
     try:
-        output = subprocess.check_output(f'netstat -ano | findstr LISTENING | findstr ":{port}"', shell=True).decode('cp950', errors='ignore')
         current_pid = os.getpid()
+        cmd = f'netstat -ano'
+        output = subprocess.check_output(cmd, shell=True).decode('utf-8', errors='ignore')
         for line in output.splitlines():
-            parts = line.strip().split()
-            if len(parts) >= 5:
-                pid = int(parts[-1])
-                if pid != current_pid:
-                    print(f"  ⚡ 發現 Port {port} 已被 PID {pid} 佔用，正在關閉舊的執行檔...")
-                    subprocess.call(f"taskkill /F /PID {pid}", shell=True)
-                    time.sleep(1)
+            line_upper = line.upper()
+            if "LISTEN" in line_upper and f":{port} " in line_upper or f":{port}\t" in line_upper or f":{port}\r" in line_upper:
+                parts = line.strip().split()
+                if len(parts) >= 5:
+                    try:
+                        pid = int(parts[-1])
+                        if pid != current_pid and pid > 0:
+                            print(f"  ⚡ 發現 Port {port} 已被 PID {pid} 佔用，正在釋放舊的程序...")
+                            subprocess.call(f"taskkill /F /PID {pid}", shell=True)
+                            time.sleep(1)
+                    except ValueError:
+                        pass
     except Exception:
         pass
 
