@@ -21,5 +21,5 @@ echo.
 
 echo  啟動中...（崩潰時將自動重啟，紀錄於 guardian.log）
 echo.
-python -X utf8 guardian.py
+"C:\Users\1120804\AppData\Local\Programs\Python\Python312\python.exe" -X utf8 guardian.py
 pause

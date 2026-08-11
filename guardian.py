@@ -14,7 +14,10 @@ from pathlib import Path
 BASE_DIR   = Path(__file__).parent.absolute()
 LOG_FILE   = BASE_DIR / "guardian.log"
 APP_SCRIPT = BASE_DIR / "web_app.py"
-PYTHON     = sys.executable
+PYTHON     = r"C:\Users\1120804\AppData\Local\Programs\Python\Python312\python.exe"
+# 若上方路徑不存在，退回使用 sys.executable
+if not Path(PYTHON).exists():
+    PYTHON = sys.executable
 
 MAX_CONSECUTIVE_CRASHES = 5   # 連續崩潰超過這個次數就暫停
 COOLDOWN_SECONDS        = 600 # 暫停 10 分鐘後再試
